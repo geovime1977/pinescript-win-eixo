@@ -1,0 +1,197 @@
+// @version=5
+// -----------------------------------------------------------------------------
+// Eixo Estratégico — WIN Day Trade | Strategy Backtestable
+// -----------------------------------------------------------------------------
+// APLICAR NO GRÁFICO DE 1 MINUTO DO ATIVO WIN.
+// Versão backtest: entra em 4/4 e sai por scale-out em cada Fibo tocado.
+// Sizing por congruência: 5/10/15/20 contratos.
+// -----------------------------------------------------------------------------
+
+strategy("Eixo WIN — Strategy 4/4", overlay=true,
+     initial_capital=100000,
+     default_qty_type=strategy.fixed,
+     default_qty_value=1,
+     pyramiding=0,
+     process_orders_on_close=true,
+     calc_on_every_tick=false,
+     commission_type=strategy.commission.cash_per_contract,
+     commission_value=0.5,
+     slippage=1)
+
+// ============================== PARÂMETROS ==================================
+tol_pct   = input.float(0.05,  "Tolerância de toque (%)",    minval=0.01, step=0.01)
+cross_win = input.int(3, "Janela de cruzamento (candles)", minval=1, maxval=10)
+gap_bars  = input.int(3, "Gap mínimo entre eventos",         minval=1, maxval=20)
+adx_min   = input.float(25.0, "ADX mín. congruência TF sup", step=1)
+
+session_end_h = input.int(17, "Hora limite pra abrir posição",  minval=10, maxval=17)
+session_end_m = input.int(30, "Minuto limite pra abrir",         minval=0,  maxval=59)
+force_close_h = input.int(17, "Hora fechamento forçado (EOD)",   minval=10, maxval=17)
+force_close_m = input.int(55, "Minuto fechamento forçado",       minval=0,  maxval=59)
+
+// ============================== FIBONACCI ===================================
+[first5_high, first5_low, _] = request.security(syminfo.tickerid, "5",
+     [ta.valuewhen(ta.change(dayofmonth) != 0, high, 0),
+      ta.valuewhen(ta.change(dayofmonth) != 0, low, 0),
+      ta.valuewhen(ta.change(dayofmonth) != 0, time, 0)],
+     lookahead=barmerge.lookahead_off)
+
+fib_range = first5_high - first5_low
+has_base = not na(first5_high) and not na(fib_range) and fib_range > 0
+
+lvl(dir, pct) => dir == "upper" ? first5_high + (pct/100.0) * fib_range : first5_low - (pct/100.0) * fib_range
+
+u0=lvl("upper",0)     l0=lvl("lower",0)
+u50=lvl("upper",50)   l50=lvl("lower",50)
+u100=lvl("upper",100) l100=lvl("lower",100)
+u150=lvl("upper",150) l150=lvl("lower",150)
+u200=lvl("upper",200) l200=lvl("lower",200)
+u250=lvl("upper",250) l250=lvl("lower",250)
+u300=lvl("upper",300) l300=lvl("lower",300)
+u350=lvl("upper",350) l350=lvl("lower",350)
+u400=lvl("upper",400) l400=lvl("lower",400)
+u450=lvl("upper",450) l450=lvl("lower",450)
+
+// ============================== 2º TOQUE ====================================
+is_new_day = ta.change(dayofmonth) != 0
+
+tocou(level_price) =>
+    tol = level_price * tol_pct / 100.0
+    (low - tol) <= level_price and level_price <= (high + tol)
+
+update(is_touching, events, bs_last) =>
+    ne = events
+    nbs = bs_last
+    if is_touching
+        if na(bs_last) or bs_last > gap_bars
+            ne := events + 1
+        nbs := 0
+    else if not na(bs_last)
+        nbs := bs_last + 1
+    [ne, nbs]
+
+var int u0e=0, u50e=0, u100e=0, u150e=0, u200e=0, u250e=0, u300e=0, u350e=0, u400e=0, u450e=0
+var int l0e=0, l50e=0, l100e=0, l150e=0, l200e=0, l250e=0, l300e=0, l350e=0, l400e=0, l450e=0
+var int u0b=na, u50b=na, u100b=na, u150b=na, u200b=na, u250b=na, u300b=na, u350b=na, u400b=na, u450b=na
+var int l0b=na, l50b=na, l100b=na, l150b=na, l200b=na, l250b=na, l300b=na, l350b=na, l400b=na, l450b=na
+
+if is_new_day
+    u0e:=0, u50e:=0, u100e:=0, u150e:=0, u200e:=0, u250e:=0, u300e:=0, u350e:=0, u400e:=0, u450e:=0
+    l0e:=0, l50e:=0, l100e:=0, l150e:=0, l200e:=0, l250e:=0, l300e:=0, l350e:=0, l400e:=0, l450e:=0
+    u0b:=na, u50b:=na, u100b:=na, u150b:=na, u200b:=na, u250b:=na, u300b:=na, u350b:=na, u400b:=na, u450b:=na
+    l0b:=na, l50b:=na, l100b:=na, l150b:=na, l200b:=na, l250b:=na, l300b:=na, l350b:=na, l400b:=na, l450b:=na
+
+if has_base
+    [nu0e, nu0b]     = update(tocou(u0), u0e, u0b),     u0e:=nu0e,     u0b:=nu0b
+    [nu50e, nu50b]   = update(tocou(u50), u50e, u50b),  u50e:=nu50e,   u50b:=nu50b
+    [nu100e, nu100b] = update(tocou(u100), u100e, u100b), u100e:=nu100e, u100b:=nu100b
+    [nu150e, nu150b] = update(tocou(u150), u150e, u150b), u150e:=nu150e, u150b:=nu150b
+    [nu200e, nu200b] = update(tocou(u200), u200e, u200b), u200e:=nu200e, u200b:=nu200b
+    [nu250e, nu250b] = update(tocou(u250), u250e, u250b), u250e:=nu250e, u250b:=nu250b
+    [nu300e, nu300b] = update(tocou(u300), u300e, u300b), u300e:=nu300e, u300b:=nu300b
+    [nu350e, nu350b] = update(tocou(u350), u350e, u350b), u350e:=nu350e, u350b:=nu350b
+    [nu400e, nu400b] = update(tocou(u400), u400e, u400b), u400e:=nu400e, u400b:=nu400b
+    [nu450e, nu450b] = update(tocou(u450), u450e, u450b), u450e:=nu450e, u450b:=nu450b
+    [nl0e, nl0b]     = update(tocou(l0), l0e, l0b),     l0e:=nl0e,     l0b:=nl0b
+    [nl50e, nl50b]   = update(tocou(l50), l50e, l50b),  l50e:=nl50e,   l50b:=nl50b
+    [nl100e, nl100b] = update(tocou(l100), l100e, l100b), l100e:=nl100e, l100b:=nl100b
+    [nl150e, nl150b] = update(tocou(l150), l150e, l150b), l150e:=nl150e, l150b:=nl150b
+    [nl200e, nl200b] = update(tocou(l200), l200e, l200b), l200e:=nl200e, l200b:=nl200b
+    [nl250e, nl250b] = update(tocou(l250), l250e, l250b), l250e:=nl250e, l250b:=nl250b
+    [nl300e, nl300b] = update(tocou(l300), l300e, l300b), l300e:=nl300e, l300b:=nl300b
+    [nl350e, nl350b] = update(tocou(l350), l350e, l350b), l350e:=nl350e, l350b:=nl350b
+    [nl400e, nl400b] = update(tocou(l400), l400e, l400b), l400e:=nl400e, l400b:=nl400b
+    [nl450e, nl450b] = update(tocou(l450), l450e, l450b), l450e:=nl450e, l450b:=nl450b
+
+second_upper = (tocou(u0) and u0e>=2) or (tocou(u50) and u50e>=2) or (tocou(u100) and u100e>=2) or (tocou(u150) and u150e>=2) or (tocou(u200) and u200e>=2) or (tocou(u250) and u250e>=2) or (tocou(u300) and u300e>=2) or (tocou(u350) and u350e>=2) or (tocou(u400) and u400e>=2) or (tocou(u450) and u450e>=2)
+second_lower = (tocou(l0) and l0e>=2) or (tocou(l50) and l50e>=2) or (tocou(l100) and l100e>=2) or (tocou(l150) and l150e>=2) or (tocou(l200) and l200e>=2) or (tocou(l250) and l250e>=2) or (tocou(l300) and l300e>=2) or (tocou(l350) and l350e>=2) or (tocou(l400) and l400e>=2) or (tocou(l450) and l450e>=2)
+
+// ============================== INDICADORES =================================
+stoch_k = ta.stoch(close, high, low, 5)
+stoch_d = ta.sma(stoch_k, 3)
+stoch_up_recent = ta.barssince(ta.crossover(stoch_k, stoch_d)) < cross_win
+stoch_dn_recent = ta.barssince(ta.crossunder(stoch_k, stoch_d)) < cross_win
+
+trix_up_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossover(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))) < cross_win)
+trix_dn_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossunder(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))) < cross_win)
+
+adx5 = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[2])
+adx_dn_80_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossunder(ta.dmi(8, 8)[2], 80)) < cross_win)
+adx_entry_ok = adx5 > 30 or adx_dn_80_recent
+
+// ============================== CONGRUÊNCIA MTF =============================
+[dip15, dim15, adx15] = request.security(syminfo.tickerid, "15", ta.dmi(8, 8))
+[dip30, dim30, adx30] = request.security(syminfo.tickerid, "30", ta.dmi(8, 8))
+[dip60, dim60, adx60] = request.security(syminfo.tickerid, "60", ta.dmi(8, 8))
+
+cong_buy_score  = (adx15>adx_min and dip15>dim15 ? 1 : 0) + (adx30>adx_min and dip30>dim30 ? 1 : 0) + (adx60>adx_min and dip60>dim60 ? 1 : 0)
+cong_sell_score = (adx15>adx_min and dim15>dip15 ? 1 : 0) + (adx30>adx_min and dim30>dip30 ? 1 : 0) + (adx60>adx_min and dim60>dip60 ? 1 : 0)
+
+// ============================== SCORE 4/4 ===================================
+buy_signal_44  = second_lower and stoch_up_recent and trix_up_recent and adx_entry_ok
+sell_signal_44 = second_upper and stoch_dn_recent and trix_dn_recent and adx_entry_ok
+
+// ============================== SESSION FILTER ==============================
+in_entry_window = (hour < session_end_h) or (hour == session_end_h and minute < session_end_m)
+in_eod_window   = (hour > force_close_h) or (hour == force_close_h and minute >= force_close_m)
+
+// ============================== SIZING ======================================
+sizing_contratos(cong) => cong == 3 ? 20 : cong == 2 ? 15 : cong == 1 ? 10 : 5
+
+// ============================== ENTRADAS ====================================
+// Compra: 4/4 buy + em janela + sem posição aberta
+if buy_signal_44 and in_entry_window and strategy.position_size == 0 and has_base
+    qty = sizing_contratos(cong_buy_score)
+    strategy.entry("Long", strategy.long, qty=qty, comment="4/4 Buy cong=" + str.tostring(cong_buy_score))
+    // Stop no Fibo anterior (aprox: 100 pontos abaixo da entrada)
+    stop_price = close - fib_range * 0.5
+    // Scale-out em cada Fibo alcançado
+    // Divide em 4 targets pro caso cong=3, 3 pra cong=2, 2 pra cong=1, 1 pra cong=0
+    if cong_buy_score == 3
+        strategy.exit("T1", from_entry="Long", qty_percent=25, limit=lvl("upper", 100), stop=stop_price)
+        strategy.exit("T2", from_entry="Long", qty_percent=33, limit=lvl("upper", 200), stop=stop_price)
+        strategy.exit("T3", from_entry="Long", qty_percent=50, limit=lvl("upper", 300), stop=stop_price)
+        strategy.exit("T4", from_entry="Long", limit=lvl("upper", 450), stop=stop_price)
+    else if cong_buy_score == 2
+        strategy.exit("T1", from_entry="Long", qty_percent=33, limit=lvl("upper", 100), stop=stop_price)
+        strategy.exit("T2", from_entry="Long", qty_percent=50, limit=lvl("upper", 200), stop=stop_price)
+        strategy.exit("T3", from_entry="Long", limit=lvl("upper", 350), stop=stop_price)
+    else if cong_buy_score == 1
+        strategy.exit("T1", from_entry="Long", qty_percent=50, limit=lvl("upper", 100), stop=stop_price)
+        strategy.exit("T2", from_entry="Long", limit=lvl("upper", 250), stop=stop_price)
+    else
+        strategy.exit("T1", from_entry="Long", limit=lvl("upper", 50), stop=stop_price)
+
+if sell_signal_44 and in_entry_window and strategy.position_size == 0 and has_base
+    qty = sizing_contratos(cong_sell_score)
+    strategy.entry("Short", strategy.short, qty=qty, comment="4/4 Sell cong=" + str.tostring(cong_sell_score))
+    stop_price = close + fib_range * 0.5
+    if cong_sell_score == 3
+        strategy.exit("T1", from_entry="Short", qty_percent=25, limit=lvl("lower", 100), stop=stop_price)
+        strategy.exit("T2", from_entry="Short", qty_percent=33, limit=lvl("lower", 200), stop=stop_price)
+        strategy.exit("T3", from_entry="Short", qty_percent=50, limit=lvl("lower", 300), stop=stop_price)
+        strategy.exit("T4", from_entry="Short", limit=lvl("lower", 450), stop=stop_price)
+    else if cong_sell_score == 2
+        strategy.exit("T1", from_entry="Short", qty_percent=33, limit=lvl("lower", 100), stop=stop_price)
+        strategy.exit("T2", from_entry="Short", qty_percent=50, limit=lvl("lower", 200), stop=stop_price)
+        strategy.exit("T3", from_entry="Short", limit=lvl("lower", 350), stop=stop_price)
+    else if cong_sell_score == 1
+        strategy.exit("T1", from_entry="Short", qty_percent=50, limit=lvl("lower", 100), stop=stop_price)
+        strategy.exit("T2", from_entry="Short", limit=lvl("lower", 250), stop=stop_price)
+    else
+        strategy.exit("T1", from_entry="Short", limit=lvl("lower", 50), stop=stop_price)
+
+// EOD close forçado
+if in_eod_window and strategy.position_size != 0
+    strategy.close_all(comment="EOD")
+
+// ============================== PLOTS =======================================
+plot(has_base ? u100 : na, "R100", color=color.new(color.red, 60))
+plot(has_base ? u200 : na, "R200", color=color.new(color.red, 60))
+plot(has_base ? u300 : na, "R300", color=color.new(color.red, 60))
+plot(has_base ? l100 : na, "S100", color=color.new(color.blue, 60))
+plot(has_base ? l200 : na, "S200", color=color.new(color.blue, 60))
+plot(has_base ? l300 : na, "S300", color=color.new(color.blue, 60))
+
+plotshape(buy_signal_44,  title="BUY 4/4",  location=location.belowbar, color=color.green, style=shape.triangleup,   size=size.small)
+plotshape(sell_signal_44, title="SELL 4/4", location=location.abovebar, color=color.red,   style=shape.triangledown, size=size.small)
