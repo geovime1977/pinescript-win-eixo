@@ -139,10 +139,48 @@ tocou(level_price) =>
     tol = level_price * tol_pct / 100.0
     (low - tol) <= level_price and level_price <= (high + tol)
 
-var int u0_e=0,   u50_e=0,  u100_e=0, u150_e=0, u200_e=0, u250_e=0, u300_e=0, u350_e=0, u400_e=0, u450_e=0
-var int l0_e=0,   l50_e=0,  l100_e=0, l150_e=0, l200_e=0, l250_e=0, l300_e=0, l350_e=0, l400_e=0, l450_e=0
-var int u0_b=na,  u50_b=na, u100_b=na, u150_b=na, u200_b=na, u250_b=na, u300_b=na, u350_b=na, u400_b=na, u450_b=na
-var int l0_b=na,  l50_b=na, l100_b=na, l150_b=na, l200_b=na, l250_b=na, l300_b=na, l350_b=na, l400_b=na, l450_b=na
+// Contadores de eventos por nível (Pine v5 exige uma declaração por linha)
+var int u0_e = 0
+var int u50_e = 0
+var int u100_e = 0
+var int u150_e = 0
+var int u200_e = 0
+var int u250_e = 0
+var int u300_e = 0
+var int u350_e = 0
+var int u400_e = 0
+var int u450_e = 0
+var int l0_e = 0
+var int l50_e = 0
+var int l100_e = 0
+var int l150_e = 0
+var int l200_e = 0
+var int l250_e = 0
+var int l300_e = 0
+var int l350_e = 0
+var int l400_e = 0
+var int l450_e = 0
+// "bars since last touch" — usa int(na) inicial
+var int u0_b = na
+var int u50_b = na
+var int u100_b = na
+var int u150_b = na
+var int u200_b = na
+var int u250_b = na
+var int u300_b = na
+var int u350_b = na
+var int u400_b = na
+var int u450_b = na
+var int l0_b = na
+var int l50_b = na
+var int l100_b = na
+var int l150_b = na
+var int l200_b = na
+var int l250_b = na
+var int l300_b = na
+var int l350_b = na
+var int l400_b = na
+var int l450_b = na
 
 update(is_touching, events, bs_last) =>
     ne = events
