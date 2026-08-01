@@ -3,10 +3,8 @@
 // Eixo Estratégico — WIN Day Trade | Indicador de Sinais 4/4
 // -----------------------------------------------------------------------------
 // APLICAR ESTE INDICADOR NO GRÁFICO DE 1 MINUTO DO ATIVO WIN.
-// A estratégia canônica exige:
-//   - Timeframe operacional: 1 minuto (gatilho, 2º toque)
-//   - Timeframes de contexto: 5min (TRIX, ADX), 15/30/60m (congruência)
-//   - Fibonacci: primeiro candle de 5min do dia
+// Timeframe operacional: 1min | Contexto: 5m (TRIX, ADX), 15/30/60m (congruência)
+// Fibonacci: primeiro candle 5min do dia
 // -----------------------------------------------------------------------------
 
 indicator("Eixo WIN — Sinais 4/4", overlay=true,
@@ -14,60 +12,54 @@ indicator("Eixo WIN — Sinais 4/4", overlay=true,
 
 // ============================== PARÂMETROS ==================================
 grpFibo   = "Fibonacci"
-show_fibo = input.bool(true,  "Mostrar níveis Fibo",             group=grpFibo)
-show_all  = input.bool(false, "Mostrar todos os 20 níveis",       group=grpFibo,
-     tooltip="Se falso, mostra só até Fibo 250 (menos poluição)")
-tol_pct   = input.float(0.05,  "Tolerância de toque (%)",         group=grpFibo, minval=0.01, step=0.01)
+show_fibo = input.bool(true,  "Mostrar níveis Fibo",              group=grpFibo)
+show_all  = input.bool(false, "Mostrar todos os 20 níveis",        group=grpFibo)
+tol_pct   = input.float(0.05, "Tolerância de toque (%)",           group=grpFibo, minval=0.01, step=0.01)
 
 grpSig    = "Sinais"
 cross_win = input.int(3, "Janela de cruzamento (candles)",         group=grpSig, minval=1, maxval=10)
-gap_bars  = input.int(3, "Gap mínimo entre eventos de toque",       group=grpSig, minval=1, maxval=20,
-     tooltip="Nº de candles 1min sem tocar pra contar como novo evento")
+gap_bars  = input.int(3, "Gap mínimo entre eventos de toque",       group=grpSig, minval=1, maxval=20)
 adx_min   = input.float(25.0, "ADX mínimo pra congruência TF sup.", group=grpSig, step=1)
 
-grpPnl   = "Painel"
-show_panel = input.bool(true, "Mostrar painel de sinais", group=grpPnl)
+grpPnl     = "Painel"
+show_panel = input.bool(true, "Mostrar painel de sinais",           group=grpPnl)
 panel_pos  = input.string("top_right", "Posição do painel", options=["top_right","top_left","bottom_right","bottom_left"], group=grpPnl)
 
-// ============================== FIBONACCI ===================================
-// Puxa high/low do primeiro candle 5min do dia
-[first5_high, first5_low, first5_time] = request.security(syminfo.tickerid, "5",
-     [ta.valuewhen(ta.change(dayofmonth) != 0, high, 0),
-      ta.valuewhen(ta.change(dayofmonth) != 0, low,  0),
-      ta.valuewhen(ta.change(dayofmonth) != 0, time, 0)],
-     lookahead=barmerge.lookahead_off)
+// ============================== HELPERS =====================================
+// TRIX manual (Pine v5 não tem ta.trix nativo confiável em request.security)
+trix_calc(src, len) =>
+    ema1 = ta.ema(src, len)
+    ema2 = ta.ema(ema1, len)
+    ema3 = ta.ema(ema2, len)
+    ta.roc(ema3, 1)
 
+// ============================== FIBONACCI ===================================
+// Puxa high/low do primeiro candle 5min do dia via request.security
+get_first5_of_day() =>
+    is_first = ta.change(dayofmonth) != 0
+    fh = ta.valuewhen(is_first, high, 0)
+    fl = ta.valuewhen(is_first, low, 0)
+    [fh, fl]
+
+[first5_high, first5_low] = request.security(syminfo.tickerid, "5", get_first5_of_day(), lookahead=barmerge.lookahead_off)
 fib_range = first5_high - first5_low
+has_base = not na(first5_high) and not na(fib_range) and fib_range > 0
 
 fib_level(direction, pct) =>
     direction == "upper" ? first5_high + (pct / 100.0) * fib_range : first5_low - (pct / 100.0) * fib_range
 
-// Níveis
-u0   = fib_level("upper", 0)
-u50  = fib_level("upper", 50)
-u100 = fib_level("upper", 100)
-u150 = fib_level("upper", 150)
-u200 = fib_level("upper", 200)
-u250 = fib_level("upper", 250)
-u300 = fib_level("upper", 300)
-u350 = fib_level("upper", 350)
-u400 = fib_level("upper", 400)
-u450 = fib_level("upper", 450)
-l0   = fib_level("lower", 0)
-l50  = fib_level("lower", 50)
-l100 = fib_level("lower", 100)
-l150 = fib_level("lower", 150)
-l200 = fib_level("lower", 200)
-l250 = fib_level("lower", 250)
-l300 = fib_level("lower", 300)
-l350 = fib_level("lower", 350)
-l400 = fib_level("lower", 400)
-l450 = fib_level("lower", 450)
+// Níveis (10 upper + 10 lower)
+u0=fib_level("upper",0)     l0=fib_level("lower",0)
+u50=fib_level("upper",50)   l50=fib_level("lower",50)
+u100=fib_level("upper",100) l100=fib_level("lower",100)
+u150=fib_level("upper",150) l150=fib_level("lower",150)
+u200=fib_level("upper",200) l200=fib_level("lower",200)
+u250=fib_level("upper",250) l250=fib_level("lower",250)
+u300=fib_level("upper",300) l300=fib_level("lower",300)
+u350=fib_level("upper",350) l350=fib_level("lower",350)
+u400=fib_level("upper",400) l400=fib_level("lower",400)
+u450=fib_level("upper",450) l450=fib_level("lower",450)
 
-// Plots Fibo (só quando temos base do dia)
-has_base = not na(first5_high) and not na(fib_range) and fib_range > 0
-
-// Cores: suporte azul (compra), resistência vermelho (venda)
 color_sup = color.new(color.blue, 60)
 color_res = color.new(color.red,  60)
 
@@ -92,260 +84,192 @@ plot(show_fibo and has_base and show_all ? l350 : na, "S350", color=color_sup)
 plot(show_fibo and has_base and show_all ? l400 : na, "S400", color=color_sup)
 plot(show_fibo and has_base and show_all ? l450 : na, "S450", color=color_sup)
 
-// ============================== INDICADORES =================================
-// Estocástico (5,3) — timeframe do gráfico (1min)
+// ============================== INDICADORES 1min (chart) ====================
+// Estocástico (5,3) no timeframe do gráfico
 stoch_k = ta.stoch(close, high, low, 5)
 stoch_d = ta.sma(stoch_k, 3)
 stoch_cross_up = ta.crossover(stoch_k, stoch_d)
 stoch_cross_dn = ta.crossunder(stoch_k, stoch_d)
+stoch_up_recent = ta.barssince(stoch_cross_up) < cross_win
+stoch_dn_recent = ta.barssince(stoch_cross_dn) < cross_win
 
-// TRIX(9) + MM(4) do 5min via request.security
-trix5 = request.security(syminfo.tickerid, "5", ta.trix(close, 9))
-trix_ma5 = request.security(syminfo.tickerid, "5", ta.sma(ta.trix(close, 9), 4))
-trix_cross_up_5m = request.security(syminfo.tickerid, "5", ta.crossover(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4)))
-trix_cross_dn_5m = request.security(syminfo.tickerid, "5", ta.crossunder(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4)))
+// ============================== INDICADORES 5min via request ================
+get_5m_signals() =>
+    trix_val = trix_calc(close, 9)
+    trix_ma = ta.sma(trix_val, 4)
+    cu = ta.crossover(trix_val, trix_ma)
+    cd = ta.crossunder(trix_val, trix_ma)
+    trix_up_r = ta.barssince(cu) < 3
+    trix_dn_r = ta.barssince(cd) < 3
+    [dmp, dmn, adx_v] = ta.dmi(8, 8)
+    adx_cross_dn_80 = ta.crossunder(adx_v, 80)
+    adx_cross_up_30 = ta.crossover(adx_v, 30)
+    adx_dn_80_r = ta.barssince(adx_cross_dn_80) < 3
+    adx_up_30_r = ta.barssince(adx_cross_up_30) < 3
+    [trix_up_r, trix_dn_r, adx_v, adx_dn_80_r, adx_up_30_r]
 
-// ADX(8) do 5min + cruzamentos com 80 e 30
-adx5   = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[2])
-adx_dn_80_5m = request.security(syminfo.tickerid, "5", ta.crossunder(ta.dmi(8, 8)[2], 80))
-adx_up_30_5m = request.security(syminfo.tickerid, "5", ta.crossover(ta.dmi(8, 8)[2], 30))
+[trix_up_5m, trix_dn_5m, adx5, adx_dn_80_5m, adx_up_30_5m] = request.security(syminfo.tickerid, "5", get_5m_signals(), lookahead=barmerge.lookahead_off)
 
-// ============================== 2º TOQUE ====================================
-// Detector: marca "está tocando um Fibo específico agora?" e conta eventos por dia.
-// Um evento novo dispara quando há gap de N candles sem tocar aquele nível.
-
-// Reset em novo dia
-is_new_day = ta.change(dayofmonth) != 0
-
-// Função: retorna true se a candle 1m tocou o nível (dentro da tolerância)
-tocou(level_price) =>
-    tol = level_price * tol_pct / 100.0
-    (low - tol) <= level_price and level_price <= (high + tol)
-
-// Rastreamento de toques (via var int) por nível
-// Cada nível tem: contador de eventos + "bars since last touch"
-var int u0_events   = 0
-var int u50_events  = 0
-var int u100_events = 0
-var int u150_events = 0
-var int u200_events = 0
-var int u250_events = 0
-var int u300_events = 0
-var int u350_events = 0
-var int u400_events = 0
-var int u450_events = 0
-var int l0_events   = 0
-var int l50_events  = 0
-var int l100_events = 0
-var int l150_events = 0
-var int l200_events = 0
-var int l250_events = 0
-var int l300_events = 0
-var int l350_events = 0
-var int l400_events = 0
-var int l450_events = 0
-
-var int u0_bs   = na
-var int u50_bs  = na
-var int u100_bs = na
-var int u150_bs = na
-var int u200_bs = na
-var int u250_bs = na
-var int u300_bs = na
-var int u350_bs = na
-var int u400_bs = na
-var int u450_bs = na
-var int l0_bs   = na
-var int l50_bs  = na
-var int l100_bs = na
-var int l150_bs = na
-var int l200_bs = na
-var int l250_bs = na
-var int l300_bs = na
-var int l350_bs = na
-var int l400_bs = na
-var int l450_bs = na
-
-if is_new_day
-    u0_events   := 0
-    u50_events  := 0
-    u100_events := 0
-    u150_events := 0
-    u200_events := 0
-    u250_events := 0
-    u300_events := 0
-    u350_events := 0
-    u400_events := 0
-    u450_events := 0
-    l0_events   := 0
-    l50_events  := 0
-    l100_events := 0
-    l150_events := 0
-    l200_events := 0
-    l250_events := 0
-    l300_events := 0
-    l350_events := 0
-    l400_events := 0
-    l450_events := 0
-    u0_bs   := na
-    u50_bs  := na
-    u100_bs := na
-    u150_bs := na
-    u200_bs := na
-    u250_bs := na
-    u300_bs := na
-    u350_bs := na
-    u400_bs := na
-    u450_bs := na
-    l0_bs   := na
-    l50_bs  := na
-    l100_bs := na
-    l150_bs := na
-    l200_bs := na
-    l250_bs := na
-    l300_bs := na
-    l350_bs := na
-    l400_bs := na
-    l450_bs := na
-
-// Atualização de eventos: se tocou E último toque foi há > gap_bars → novo evento
-update_touch(is_touching, events, bs_last) =>
-    new_events = events
-    new_bs = bs_last
-    if is_touching
-        if na(bs_last) or bs_last > gap_bars
-            new_events := events + 1
-        new_bs := 0
-    else if not na(bs_last)
-        new_bs := bs_last + 1
-    [new_events, new_bs]
-
-if has_base
-    [u0_e, u0_b] = update_touch(tocou(u0), u0_events, u0_bs)
-    u0_events := u0_e
-    u0_bs := u0_b
-    [u50_e, u50_b] = update_touch(tocou(u50), u50_events, u50_bs)
-    u50_events := u50_e
-    u50_bs := u50_b
-    [u100_e, u100_b] = update_touch(tocou(u100), u100_events, u100_bs)
-    u100_events := u100_e
-    u100_bs := u100_b
-    [u150_e, u150_b] = update_touch(tocou(u150), u150_events, u150_bs)
-    u150_events := u150_e
-    u150_bs := u150_b
-    [u200_e, u200_b] = update_touch(tocou(u200), u200_events, u200_bs)
-    u200_events := u200_e
-    u200_bs := u200_b
-    [u250_e, u250_b] = update_touch(tocou(u250), u250_events, u250_bs)
-    u250_events := u250_e
-    u250_bs := u250_b
-    [u300_e, u300_b] = update_touch(tocou(u300), u300_events, u300_bs)
-    u300_events := u300_e
-    u300_bs := u300_b
-    [u350_e, u350_b] = update_touch(tocou(u350), u350_events, u350_bs)
-    u350_events := u350_e
-    u350_bs := u350_b
-    [u400_e, u400_b] = update_touch(tocou(u400), u400_events, u400_bs)
-    u400_events := u400_e
-    u400_bs := u400_b
-    [u450_e, u450_b] = update_touch(tocou(u450), u450_events, u450_bs)
-    u450_events := u450_e
-    u450_bs := u450_b
-    [l0_e, l0_b] = update_touch(tocou(l0), l0_events, l0_bs)
-    l0_events := l0_e
-    l0_bs := l0_b
-    [l50_e, l50_b] = update_touch(tocou(l50), l50_events, l50_bs)
-    l50_events := l50_e
-    l50_bs := l50_b
-    [l100_e, l100_b] = update_touch(tocou(l100), l100_events, l100_bs)
-    l100_events := l100_e
-    l100_bs := l100_b
-    [l150_e, l150_b] = update_touch(tocou(l150), l150_events, l150_bs)
-    l150_events := l150_e
-    l150_bs := l150_b
-    [l200_e, l200_b] = update_touch(tocou(l200), l200_events, l200_bs)
-    l200_events := l200_e
-    l200_bs := l200_b
-    [l250_e, l250_b] = update_touch(tocou(l250), l250_events, l250_bs)
-    l250_events := l250_e
-    l250_bs := l250_b
-    [l300_e, l300_b] = update_touch(tocou(l300), l300_events, l300_bs)
-    l300_events := l300_e
-    l300_bs := l300_b
-    [l350_e, l350_b] = update_touch(tocou(l350), l350_events, l350_bs)
-    l350_events := l350_e
-    l350_bs := l350_b
-    [l400_e, l400_b] = update_touch(tocou(l400), l400_events, l400_bs)
-    l400_events := l400_e
-    l400_bs := l400_b
-    [l450_e, l450_b] = update_touch(tocou(l450), l450_events, l450_bs)
-    l450_events := l450_e
-    l450_bs := l450_b
-
-// Detecta: preço está no 2º+ toque de ALGUM nível upper (resistência) → venda
-// Preço está no 2º+ toque de ALGUM nível lower (suporte) → compra
-
-second_touch_upper =
-     (tocou(u0)   and u0_events   >= 2) or
-     (tocou(u50)  and u50_events  >= 2) or
-     (tocou(u100) and u100_events >= 2) or
-     (tocou(u150) and u150_events >= 2) or
-     (tocou(u200) and u200_events >= 2) or
-     (tocou(u250) and u250_events >= 2) or
-     (tocou(u300) and u300_events >= 2) or
-     (tocou(u350) and u350_events >= 2) or
-     (tocou(u400) and u400_events >= 2) or
-     (tocou(u450) and u450_events >= 2)
-
-second_touch_lower =
-     (tocou(l0)   and l0_events   >= 2) or
-     (tocou(l50)  and l50_events  >= 2) or
-     (tocou(l100) and l100_events >= 2) or
-     (tocou(l150) and l150_events >= 2) or
-     (tocou(l200) and l200_events >= 2) or
-     (tocou(l250) and l250_events >= 2) or
-     (tocou(l300) and l300_events >= 2) or
-     (tocou(l350) and l350_events >= 2) or
-     (tocou(l400) and l400_events >= 2) or
-     (tocou(l450) and l450_events >= 2)
+// Condição 4 ADX branch OU (entrada): >30 OU cruzou pra baixo do 80
+adx_entry_ok = adx5 > 30 or adx_dn_80_5m
 
 // ============================== CONGRUÊNCIA MTF =============================
-// Congruência = ADX > adx_min E DI+ na direção certa
-[dip15, dim15, adx15] = request.security(syminfo.tickerid, "15", ta.dmi(8, 8), lookahead=barmerge.lookahead_off)
-[dip30, dim30, adx30] = request.security(syminfo.tickerid, "30", ta.dmi(8, 8), lookahead=barmerge.lookahead_off)
-[dip60, dim60, adx60] = request.security(syminfo.tickerid, "60", ta.dmi(8, 8), lookahead=barmerge.lookahead_off)
+get_higher_tf() =>
+    [dmp, dmn, adx_v] = ta.dmi(8, 8)
+    [dmp, dmn, adx_v]
 
-cong15_buy  = adx15 > adx_min and dip15 > dim15
-cong30_buy  = adx30 > adx_min and dip30 > dim30
-cong60_buy  = adx60 > adx_min and dip60 > dim60
-cong15_sell = adx15 > adx_min and dim15 > dip15
-cong30_sell = adx30 > adx_min and dim30 > dip30
-cong60_sell = adx60 > adx_min and dim60 > dip60
+[dmp15, dmn15, adx15] = request.security(syminfo.tickerid, "15", get_higher_tf(), lookahead=barmerge.lookahead_off)
+[dmp30, dmn30, adx30] = request.security(syminfo.tickerid, "30", get_higher_tf(), lookahead=barmerge.lookahead_off)
+[dmp60, dmn60, adx60] = request.security(syminfo.tickerid, "60", get_higher_tf(), lookahead=barmerge.lookahead_off)
+
+cong15_buy  = adx15 > adx_min and dmp15 > dmn15
+cong30_buy  = adx30 > adx_min and dmp30 > dmn30
+cong60_buy  = adx60 > adx_min and dmp60 > dmn60
+cong15_sell = adx15 > adx_min and dmn15 > dmp15
+cong30_sell = adx30 > adx_min and dmn30 > dmp30
+cong60_sell = adx60 > adx_min and dmn60 > dmp60
 
 cong_buy_score  = (cong15_buy  ? 1 : 0) + (cong30_buy  ? 1 : 0) + (cong60_buy  ? 1 : 0)
 cong_sell_score = (cong15_sell ? 1 : 0) + (cong30_sell ? 1 : 0) + (cong60_sell ? 1 : 0)
 
-// ============================== 4 CONDIÇÕES =================================
-// Condição 2 (Estoc 1m) — cruzou na janela
-stoch_up_recent = ta.barssince(stoch_cross_up) < cross_win
-stoch_dn_recent = ta.barssince(stoch_cross_dn) < cross_win
+// ============================== 2º TOQUE (nível a nível) ====================
+is_new_day = ta.change(dayofmonth) != 0
 
-// Condição 3 (TRIX 5m) — cruzou na janela
-trix_up_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossover(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))) < cross_win)
-trix_dn_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossunder(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))) < cross_win)
+tocou(level_price) =>
+    tol = level_price * tol_pct / 100.0
+    (low - tol) <= level_price and level_price <= (high + tol)
 
-// Condição 4 (ADX 5m branch OU) — entrada
-adx_entry_ok = adx5 > 30 or (request.security(syminfo.tickerid, "5", ta.barssince(ta.crossunder(ta.dmi(8, 8)[2], 80))) < cross_win)
+var int u0_e=0,   u50_e=0,  u100_e=0, u150_e=0, u200_e=0, u250_e=0, u300_e=0, u350_e=0, u400_e=0, u450_e=0
+var int l0_e=0,   l50_e=0,  l100_e=0, l150_e=0, l200_e=0, l250_e=0, l300_e=0, l350_e=0, l400_e=0, l450_e=0
+var int u0_b=na,  u50_b=na, u100_b=na, u150_b=na, u200_b=na, u250_b=na, u300_b=na, u350_b=na, u400_b=na, u450_b=na
+var int l0_b=na,  l50_b=na, l100_b=na, l150_b=na, l200_b=na, l250_b=na, l300_b=na, l350_b=na, l400_b=na, l450_b=na
 
-// Score buy/sell
-buy_cond1 = second_touch_lower
-buy_cond2 = stoch_up_recent
-buy_cond3 = trix_up_recent
-buy_cond4 = adx_entry_ok
+update(is_touching, events, bs_last) =>
+    ne = events
+    nbs = bs_last
+    if is_touching
+        if na(bs_last) or bs_last > gap_bars
+            ne := events + 1
+        nbs := 0
+    else if not na(bs_last)
+        nbs := bs_last + 1
+    [ne, nbs]
 
-sell_cond1 = second_touch_upper
+if is_new_day
+    u0_e := 0
+    u50_e := 0
+    u100_e := 0
+    u150_e := 0
+    u200_e := 0
+    u250_e := 0
+    u300_e := 0
+    u350_e := 0
+    u400_e := 0
+    u450_e := 0
+    l0_e := 0
+    l50_e := 0
+    l100_e := 0
+    l150_e := 0
+    l200_e := 0
+    l250_e := 0
+    l300_e := 0
+    l350_e := 0
+    l400_e := 0
+    l450_e := 0
+    u0_b := na
+    u50_b := na
+    u100_b := na
+    u150_b := na
+    u200_b := na
+    u250_b := na
+    u300_b := na
+    u350_b := na
+    u400_b := na
+    u450_b := na
+    l0_b := na
+    l50_b := na
+    l100_b := na
+    l150_b := na
+    l200_b := na
+    l250_b := na
+    l300_b := na
+    l350_b := na
+    l400_b := na
+    l450_b := na
+
+if has_base
+    [_e1, _b1] = update(tocou(u0), u0_e, u0_b)
+    u0_e := _e1
+    u0_b := _b1
+    [_e2, _b2] = update(tocou(u50), u50_e, u50_b)
+    u50_e := _e2
+    u50_b := _b2
+    [_e3, _b3] = update(tocou(u100), u100_e, u100_b)
+    u100_e := _e3
+    u100_b := _b3
+    [_e4, _b4] = update(tocou(u150), u150_e, u150_b)
+    u150_e := _e4
+    u150_b := _b4
+    [_e5, _b5] = update(tocou(u200), u200_e, u200_b)
+    u200_e := _e5
+    u200_b := _b5
+    [_e6, _b6] = update(tocou(u250), u250_e, u250_b)
+    u250_e := _e6
+    u250_b := _b6
+    [_e7, _b7] = update(tocou(u300), u300_e, u300_b)
+    u300_e := _e7
+    u300_b := _b7
+    [_e8, _b8] = update(tocou(u350), u350_e, u350_b)
+    u350_e := _e8
+    u350_b := _b8
+    [_e9, _b9] = update(tocou(u400), u400_e, u400_b)
+    u400_e := _e9
+    u400_b := _b9
+    [_e10, _b10] = update(tocou(u450), u450_e, u450_b)
+    u450_e := _e10
+    u450_b := _b10
+    [_e11, _b11] = update(tocou(l0), l0_e, l0_b)
+    l0_e := _e11
+    l0_b := _b11
+    [_e12, _b12] = update(tocou(l50), l50_e, l50_b)
+    l50_e := _e12
+    l50_b := _b12
+    [_e13, _b13] = update(tocou(l100), l100_e, l100_b)
+    l100_e := _e13
+    l100_b := _b13
+    [_e14, _b14] = update(tocou(l150), l150_e, l150_b)
+    l150_e := _e14
+    l150_b := _b14
+    [_e15, _b15] = update(tocou(l200), l200_e, l200_b)
+    l200_e := _e15
+    l200_b := _b15
+    [_e16, _b16] = update(tocou(l250), l250_e, l250_b)
+    l250_e := _e16
+    l250_b := _b16
+    [_e17, _b17] = update(tocou(l300), l300_e, l300_b)
+    l300_e := _e17
+    l300_b := _b17
+    [_e18, _b18] = update(tocou(l350), l350_e, l350_b)
+    l350_e := _e18
+    l350_b := _b18
+    [_e19, _b19] = update(tocou(l400), l400_e, l400_b)
+    l400_e := _e19
+    l400_b := _b19
+    [_e20, _b20] = update(tocou(l450), l450_e, l450_b)
+    l450_e := _e20
+    l450_b := _b20
+
+second_upper = (tocou(u0)   and u0_e   >= 2) or (tocou(u50)  and u50_e  >= 2) or (tocou(u100) and u100_e >= 2) or (tocou(u150) and u150_e >= 2) or (tocou(u200) and u200_e >= 2) or (tocou(u250) and u250_e >= 2) or (tocou(u300) and u300_e >= 2) or (tocou(u350) and u350_e >= 2) or (tocou(u400) and u400_e >= 2) or (tocou(u450) and u450_e >= 2)
+second_lower = (tocou(l0)   and l0_e   >= 2) or (tocou(l50)  and l50_e  >= 2) or (tocou(l100) and l100_e >= 2) or (tocou(l150) and l150_e >= 2) or (tocou(l200) and l200_e >= 2) or (tocou(l250) and l250_e >= 2) or (tocou(l300) and l300_e >= 2) or (tocou(l350) and l350_e >= 2) or (tocou(l400) and l400_e >= 2) or (tocou(l450) and l450_e >= 2)
+
+// ============================== SCORE 4/4 ===================================
+buy_cond1  = second_lower
+buy_cond2  = stoch_up_recent
+buy_cond3  = trix_up_5m
+buy_cond4  = adx_entry_ok
+sell_cond1 = second_upper
 sell_cond2 = stoch_dn_recent
-sell_cond3 = trix_dn_recent
+sell_cond3 = trix_dn_5m
 sell_cond4 = adx_entry_ok
 
 buy_score  = (buy_cond1  ? 1 : 0) + (buy_cond2  ? 1 : 0) + (buy_cond3  ? 1 : 0) + (buy_cond4  ? 1 : 0)
@@ -354,9 +278,8 @@ sell_score = (sell_cond1 ? 1 : 0) + (sell_cond2 ? 1 : 0) + (sell_cond3 ? 1 : 0) 
 buy_signal_44  = buy_score  == 4
 sell_signal_44 = sell_score == 4
 
-// Sizing sugerido (só display)
-sizing_contratos(cong) =>
-    cong == 3 ? 20 : cong == 2 ? 15 : cong == 1 ? 10 : 5
+// Sizing por congruência
+sizing_contratos(cong) => cong == 3 ? 20 : cong == 2 ? 15 : cong == 1 ? 10 : 5
 
 // ============================== PAINEL VISUAL ===============================
 pos_table = panel_pos == "top_right" ? position.top_right : panel_pos == "top_left" ? position.top_left : panel_pos == "bottom_right" ? position.bottom_right : position.bottom_left
@@ -368,42 +291,39 @@ color_bg_44(hit) => hit ? color.new(color.green, 60) : color.new(color.gray, 90)
 
 if show_panel and barstate.islast
     table.clear(pnl, 0, 0, 2, 7)
-    table.cell(pnl, 0, 0, "EIXO WIN",           bgcolor=color.new(color.black, 30), text_color=color.white, text_size=size.small)
-    table.cell(pnl, 1, 0, "🟢 COMPRA",           bgcolor=color_bg_44(buy_signal_44),  text_color=color.white, text_size=size.small)
-    table.cell(pnl, 2, 0, "🔴 VENDA",            bgcolor=color_bg_44(sell_signal_44), text_color=color.white, text_size=size.small)
-    table.cell(pnl, 0, 1, "1. Fibo 2º toque",    text_size=size.tiny)
-    table.cell(pnl, 1, 1, light(buy_cond1),      text_size=size.tiny)
-    table.cell(pnl, 2, 1, light(sell_cond1),     text_size=size.tiny)
-    table.cell(pnl, 0, 2, "2. Estoc 1m",         text_size=size.tiny)
-    table.cell(pnl, 1, 2, light(buy_cond2),      text_size=size.tiny)
-    table.cell(pnl, 2, 2, light(sell_cond2),     text_size=size.tiny)
-    table.cell(pnl, 0, 3, "3. TRIX 5m",          text_size=size.tiny)
-    table.cell(pnl, 1, 3, light(buy_cond3),      text_size=size.tiny)
-    table.cell(pnl, 2, 3, light(sell_cond3),     text_size=size.tiny)
-    table.cell(pnl, 0, 4, "4. ADX 5m",           text_size=size.tiny)
-    table.cell(pnl, 1, 4, light(buy_cond4),      text_size=size.tiny)
-    table.cell(pnl, 2, 4, light(sell_cond4),     text_size=size.tiny)
-    table.cell(pnl, 0, 5, "Score",               text_size=size.tiny)
-    table.cell(pnl, 1, 5, str.tostring(buy_score) + "/4",  text_size=size.tiny, text_color=(buy_signal_44 ? color.green : color.gray))
-    table.cell(pnl, 2, 5, str.tostring(sell_score) + "/4", text_size=size.tiny, text_color=(sell_signal_44 ? color.red : color.gray))
-    table.cell(pnl, 0, 6, "Cong (15/30/60)",     text_size=size.tiny)
+    table.cell(pnl, 0, 0, "EIXO WIN",          bgcolor=color.new(color.black, 30), text_color=color.white, text_size=size.small)
+    table.cell(pnl, 1, 0, "🟢 COMPRA",          bgcolor=color_bg_44(buy_signal_44),  text_color=color.white, text_size=size.small)
+    table.cell(pnl, 2, 0, "🔴 VENDA",           bgcolor=color_bg_44(sell_signal_44), text_color=color.white, text_size=size.small)
+    table.cell(pnl, 0, 1, "1. Fibo 2º toque",  text_size=size.tiny)
+    table.cell(pnl, 1, 1, light(buy_cond1),    text_size=size.tiny)
+    table.cell(pnl, 2, 1, light(sell_cond1),   text_size=size.tiny)
+    table.cell(pnl, 0, 2, "2. Estoc 1m",       text_size=size.tiny)
+    table.cell(pnl, 1, 2, light(buy_cond2),    text_size=size.tiny)
+    table.cell(pnl, 2, 2, light(sell_cond2),   text_size=size.tiny)
+    table.cell(pnl, 0, 3, "3. TRIX 5m",        text_size=size.tiny)
+    table.cell(pnl, 1, 3, light(buy_cond3),    text_size=size.tiny)
+    table.cell(pnl, 2, 3, light(sell_cond3),   text_size=size.tiny)
+    table.cell(pnl, 0, 4, "4. ADX 5m",         text_size=size.tiny)
+    table.cell(pnl, 1, 4, light(buy_cond4),    text_size=size.tiny)
+    table.cell(pnl, 2, 4, light(sell_cond4),   text_size=size.tiny)
+    table.cell(pnl, 0, 5, "Score",             text_size=size.tiny)
+    table.cell(pnl, 1, 5, str.tostring(buy_score) + "/4",  text_size=size.tiny)
+    table.cell(pnl, 2, 5, str.tostring(sell_score) + "/4", text_size=size.tiny)
+    table.cell(pnl, 0, 6, "Cong (15/30/60)",   text_size=size.tiny)
     table.cell(pnl, 1, 6, light(cong15_buy)  + light(cong30_buy)  + light(cong60_buy)  + " = " + str.tostring(cong_buy_score),  text_size=size.tiny)
     table.cell(pnl, 2, 6, light(cong15_sell) + light(cong30_sell) + light(cong60_sell) + " = " + str.tostring(cong_sell_score), text_size=size.tiny)
-    table.cell(pnl, 0, 7, "Contratos",           text_size=size.tiny)
+    table.cell(pnl, 0, 7, "Contratos",         text_size=size.tiny)
     table.cell(pnl, 1, 7, str.tostring(sizing_contratos(cong_buy_score)),  text_size=size.tiny, text_color=color.green)
     table.cell(pnl, 2, 7, str.tostring(sizing_contratos(cong_sell_score)), text_size=size.tiny, text_color=color.red)
 
-// ============================== SETAS NO GRÁFICO ============================
+// ============================== SETAS + ALERTA ==============================
 plotshape(buy_signal_44,  title="GATILHO COMPRA", location=location.belowbar, color=color.green, style=shape.triangleup,   size=size.small, text="4/4 BUY")
 plotshape(sell_signal_44, title="GATILHO VENDA",  location=location.abovebar, color=color.red,   style=shape.triangledown, size=size.small, text="4/4 SELL")
 
-// ============================== ALERTA ÚNICO ================================
-// TradingView Free = 1 alerta ativo. Este alerta dispara pra COMPRA ou VENDA.
 alertcondition(buy_signal_44 or sell_signal_44,
      title="Eixo WIN — Gatilho 4/4",
-     message="{{ticker}} @ {{close}} | Setup 4/4 disparou | Cong buy={{plot(\"cong_buy_score\")}} sell={{plot(\"cong_sell_score\")}}")
+     message="{{ticker}} @ {{close}} | Setup 4/4 disparou")
 
-// Plots invisíveis pra usar em alertas customizados
 plot(buy_score,       title="buy_score",       display=display.none)
 plot(sell_score,      title="sell_score",      display=display.none)
 plot(cong_buy_score,  title="cong_buy_score",  display=display.none)
