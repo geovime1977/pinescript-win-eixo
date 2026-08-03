@@ -22,7 +22,7 @@ gap_bars  = input.int(3, "Gap mínimo entre eventos de toque",       group=grpSi
 adx_min   = input.float(25.0, "ADX mínimo pra congruência TF sup.", group=grpSig, step=1)
 sig_cooldown     = input.int(5, "Cooldown entre sinais (candles)",     group=grpSig, minval=1, maxval=60)
 max_gap_touches  = input.int(10, "Máx. candles entre 1º e 2º toque",   group=grpSig, minval=2, maxval=50, tooltip="Se o 2º toque no mesmo Fibo demorar mais que N candles, o setup expira. O próximo toque vira novo 1º toque.")
-wait_after_touch = input.int(5, "Janela pra confirmação após 2º toque (candles)", group=grpSig, minval=1, maxval=30, tooltip="Cross de Estoc 1m ou TRIX 5m vale se aconteceu ENTRE o 1º toque E até N candles APÓS o 2º toque. Cross fora dessa janela é ignorado.")
+wait_after_touch = input.int(1, "Janela pra confirmação após 2º toque (candles)", group=grpSig, minval=1, maxval=30, tooltip="Cross de Estoc 1m ou TRIX 5m vale entre o 2º toque e até N candles depois. Default 1 = apenas o candle do toque + próximo. Cross fora dessa janela é ignorado.")
 min_extras       = input.int(1, "Mín. confirmações (Estoc 1m / TRIX 5m)", group=grpSig, minval=1, maxval=2)
 show_alert   = input.bool(true, "Mostrar seta amarela de AVISO no 2º toque", group=grpSig, tooltip="Aviso visual do 2º toque, ANTES de qualquer confirmação — serve pra você se preparar.")
 adx_bonus    = input.int(5, "Bônus de contratos quando ADX 5m intensifica", group=grpSig, minval=0, maxval=10, tooltip="ADX 5m cruzou 30 pra cima OU está descendo entre 70-80 → +N contratos no sizing base (capado em 25).")
@@ -346,12 +346,13 @@ if has_base
     mid_e := _em
     mid_b := _bm
 
-// MID entra em AMBOS os lados (âncora dual) — 2ª batida no midpoint dispara setup,
-// direção decidida pelo cross do Estoc/TRIX
-mid_second_touch = tocou(umid) and mid_e >= 2
+// APENAS 2ª batida (== 2) — na 3ª, 4ª... batida no mesmo nível, NÃO dispara aviso.
+// Cada nível gera no máximo 1 amarelo por dia (o momento exato do 2º toque).
+// MID entra em AMBOS os lados (âncora dual).
+mid_second_touch = tocou(umid) and mid_e == 2
 
-second_upper = mid_second_touch or (tocou(u0)   and u0_e   >= 2) or (tocou(u50)  and u50_e  >= 2) or (tocou(u100) and u100_e >= 2) or (tocou(u150) and u150_e >= 2) or (tocou(u200) and u200_e >= 2) or (tocou(u250) and u250_e >= 2) or (tocou(u300) and u300_e >= 2) or (tocou(u350) and u350_e >= 2) or (tocou(u400) and u400_e >= 2) or (tocou(u450) and u450_e >= 2)
-second_lower = mid_second_touch or (tocou(l0)   and l0_e   >= 2) or (tocou(l50)  and l50_e  >= 2) or (tocou(l100) and l100_e >= 2) or (tocou(l150) and l150_e >= 2) or (tocou(l200) and l200_e >= 2) or (tocou(l250) and l250_e >= 2) or (tocou(l300) and l300_e >= 2) or (tocou(l350) and l350_e >= 2) or (tocou(l400) and l400_e >= 2) or (tocou(l450) and l450_e >= 2)
+second_upper = mid_second_touch or (tocou(u0)   and u0_e   == 2) or (tocou(u50)  and u50_e  == 2) or (tocou(u100) and u100_e == 2) or (tocou(u150) and u150_e == 2) or (tocou(u200) and u200_e == 2) or (tocou(u250) and u250_e == 2) or (tocou(u300) and u300_e == 2) or (tocou(u350) and u350_e == 2) or (tocou(u400) and u400_e == 2) or (tocou(u450) and u450_e == 2)
+second_lower = mid_second_touch or (tocou(l0)   and l0_e   == 2) or (tocou(l50)  and l50_e  == 2) or (tocou(l100) and l100_e == 2) or (tocou(l150) and l150_e == 2) or (tocou(l200) and l200_e == 2) or (tocou(l250) and l250_e == 2) or (tocou(l300) and l300_e == 2) or (tocou(l350) and l350_e == 2) or (tocou(l400) and l400_e == 2) or (tocou(l450) and l450_e == 2)
 
 // ============================== GATILHO (opção B — global por direção) =====
 // Fluxo de estados (por direção, buy exemplo):
