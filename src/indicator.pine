@@ -21,7 +21,8 @@ cross_win = input.int(3, "Janela de iniciação (candles)",          group=grpSi
 gap_bars  = input.int(3, "Gap mínimo entre eventos de toque",       group=grpSig, minval=1, maxval=20)
 adx_min   = input.float(25.0, "ADX mínimo pra congruência TF sup.", group=grpSig, step=1)
 sig_cooldown = input.int(5, "Cooldown entre sinais (candles)",       group=grpSig, minval=1, maxval=60)
-min_extras   = input.int(1, "Mín. confirmações (Estoc 1m / TRIX 5m)",   group=grpSig, minval=1, maxval=2, tooltip="2ª batida em Fibo é sempre obrigatória. Este parâmetro define quantos dos 2 confirmadores precisam iniciar: 1 = permissivo (default), 2 = rigoroso (ambos).")
+wait_after_touch = input.int(5, "Janela pra confirmação após o toque (candles)", group=grpSig, minval=1, maxval=30, tooltip="Quantos candles depois do 2º toque no Fibo ainda vale procurar cross de Estoc 1m ou TRIX 5m. O cross precisa acontecer APÓS o toque — cross prévio é ignorado.")
+min_extras   = input.int(1, "Mín. confirmações (Estoc 1m / TRIX 5m)",   group=grpSig, minval=1, maxval=2, tooltip="2ª batida em Fibo é sempre obrigatória. Este parâmetro define quantos dos 2 confirmadores precisam iniciar APÓS o toque: 1 = permissivo (default), 2 = rigoroso (ambos).")
 show_alert   = input.bool(true, "Mostrar seta amarela de AVISO no 2º toque", group=grpSig, tooltip="Aviso visual do 2º toque, ANTES de qualquer confirmação — serve pra você se preparar.")
 adx_bonus    = input.int(5, "Bônus de contratos quando ADX 5m intensifica", group=grpSig, minval=0, maxval=10, tooltip="ADX 5m cruzou 30 pra cima OU está descendo entre 70-80 → +N contratos no sizing base (capado em 25).")
 sizing_cap   = input.int(25, "Cap máximo de contratos",                  group=grpSig, minval=5, maxval=100)
@@ -325,16 +326,40 @@ second_upper = (tocou(u0)   and u0_e   >= 2) or (tocou(u50)  and u50_e  >= 2) or
 second_lower = (tocou(l0)   and l0_e   >= 2) or (tocou(l50)  and l50_e  >= 2) or (tocou(l100) and l100_e >= 2) or (tocou(l150) and l150_e >= 2) or (tocou(l200) and l200_e >= 2) or (tocou(l250) and l250_e >= 2) or (tocou(l300) and l300_e >= 2) or (tocou(l350) and l350_e >= 2) or (tocou(l400) and l400_e >= 2) or (tocou(l450) and l450_e >= 2)
 
 // ============================== GATILHO ====================================
-// Regra: 2ª batida no Fibo é OBRIGATÓRIA (âncora). Além dela, precisa de N
-// confirmações (Estoc 1m, TRIX 5m). N = min_extras (1 default).
-// ADX 5m saiu do grupo de confirmação — agora é INTENSIFICADOR (só afeta sizing).
+// Regra: 2ª batida no Fibo é OBRIGATÓRIA (âncora). A confirmação (Estoc 1m
+// e/ou TRIX 5m) precisa acontecer APÓS o toque, dentro da janela wait_after_touch.
+// Cross que ocorreu ANTES do toque não conta (não é "reação" ao toque).
+// ADX 5m NÃO gatilha entrada — só intensifica sizing.
 
 buy_cond1  = second_lower          // 2ª batida em suporte (âncora)
-buy_cond2  = stoch_up_recent       // confirmação 1 — Estoc 1m cross↑
-buy_cond3  = trix_up_5m            // confirmação 2 — TRIX 5m cross↑
 sell_cond1 = second_upper          // 2ª batida em resistência (âncora)
-sell_cond2 = stoch_dn_recent       // Estoc 1m cross↓
-sell_cond3 = trix_dn_5m            // TRIX 5m cross↓
+
+// Rastreia bars desde o último 2º toque (buy e sell separados)
+var int bars_since_buy_touch  = 999999
+var int bars_since_sell_touch = 999999
+
+if is_new_day
+    bars_since_buy_touch  := 999999
+    bars_since_sell_touch := 999999
+
+bars_since_buy_touch  := bars_since_buy_touch  + 1
+bars_since_sell_touch := bars_since_sell_touch + 1
+
+if buy_cond1
+    bars_since_buy_touch := 0
+if sell_cond1
+    bars_since_sell_touch := 0
+
+// Janela pós-toque ativa (toque aconteceu dentro dos últimos wait_after_touch candles)
+buy_touch_window_open  = bars_since_buy_touch  <= wait_after_touch
+sell_touch_window_open = bars_since_sell_touch <= wait_after_touch
+
+// Confirmação válida = cross aconteceu APÓS o toque, dentro da janela
+// "Após o toque" = barssince(cross) < bars_since_touch
+buy_cond2  = buy_touch_window_open  and ta.barssince(stoch_cross_up) < bars_since_buy_touch
+buy_cond3  = buy_touch_window_open  and ta.barssince(trix_up_5m)    < bars_since_buy_touch and trix_up_5m
+sell_cond2 = sell_touch_window_open and ta.barssince(stoch_cross_dn) < bars_since_sell_touch
+sell_cond3 = sell_touch_window_open and ta.barssince(trix_dn_5m)    < bars_since_sell_touch and trix_dn_5m
 
 buy_extras_score  = (buy_cond2  ? 1 : 0) + (buy_cond3  ? 1 : 0)
 sell_extras_score = (sell_cond2 ? 1 : 0) + (sell_cond3 ? 1 : 0)
@@ -343,11 +368,17 @@ sell_extras_score = (sell_cond2 ? 1 : 0) + (sell_cond3 ? 1 : 0)
 buy_score  = (buy_cond1  ? 1 : 0) + buy_extras_score
 sell_score = (sell_cond1 ? 1 : 0) + sell_extras_score
 
-// Gatilho: âncora obrigatória + mínimo de extras
-buy_signal_hit  = buy_cond1  and buy_extras_score  >= min_extras
-sell_signal_hit = sell_cond1 and sell_extras_score >= min_extras
+// Gatilho: janela pós-toque ativa + mínimo de extras confirmados
+buy_signal_hit  = buy_touch_window_open  and buy_extras_score  >= min_extras
+sell_signal_hit = sell_touch_window_open and sell_extras_score >= min_extras
 
-// Aviso: 2ª batida acontecendo — antes de qualquer confirmação
+// Reset da janela após disparar (evita re-disparo no mesmo toque)
+if buy_signal_hit
+    bars_since_buy_touch := 999999
+if sell_signal_hit
+    bars_since_sell_touch := 999999
+
+// Aviso amarelo: 2ª batida acabou de acontecer — antes de qualquer confirmação
 fibo_touch_buy_alert  = buy_cond1  and not buy_signal_hit
 fibo_touch_sell_alert = sell_cond1 and not sell_signal_hit
 
@@ -420,8 +451,9 @@ if show_panel and barstate.islast
 // Uso: buy_cond1[1] = "havia âncora no candle anterior";
 //      buy_extras_score >= min_extras neste candle = "acaba de confirmar agora"
 
-buy_confirmed_now  = buy_cond1[1]  and buy_extras_score  >= min_extras and bars_since_buy_sig  > sig_cooldown
-sell_confirmed_now = sell_cond1[1] and sell_extras_score >= min_extras and bars_since_sell_sig > sig_cooldown
+// Confirmação AGORA = janela aberta há > 0 candles (toque foi ANTES) + extras suficientes AGORA
+buy_confirmed_now  = bars_since_buy_touch  > 0 and buy_touch_window_open  and buy_extras_score  >= min_extras and bars_since_buy_sig  > sig_cooldown
+sell_confirmed_now = bars_since_sell_touch > 0 and sell_touch_window_open and sell_extras_score >= min_extras and bars_since_sell_sig > sig_cooldown
 
 // Seta amarela de AVISO no candle do toque (antes de qualquer confirmação)
 plotshape(show_alert and fibo_touch_buy_alert,  title="AVISO 2º toque SUP", location=location.belowbar, color=color.yellow, style=shape.diamond, size=size.tiny, text="!")

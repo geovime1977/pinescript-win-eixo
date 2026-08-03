@@ -23,8 +23,9 @@ tol_pct    = input.float(0.05, "Tolerância de toque (%)",    minval=0.01, step=
 cross_win  = input.int(3, "Janela de iniciação (candles)",  minval=1, maxval=10)
 gap_bars   = input.int(3, "Gap mínimo entre eventos",       minval=1, maxval=20)
 adx_min    = input.float(25.0, "ADX mín. congruência TF sup", step=1)
-min_extras = input.int(1, "Mín. confirmações (Estoc 1m / TRIX 5m)", minval=1, maxval=2)
-adx_bonus  = input.int(5, "Bônus de contratos com ADX 5m ativo", minval=0, maxval=10)
+min_extras       = input.int(1, "Mín. confirmações (Estoc 1m / TRIX 5m)", minval=1, maxval=2)
+wait_after_touch = input.int(5, "Janela pra confirmação após o toque (candles)", minval=1, maxval=30)
+adx_bonus        = input.int(5, "Bônus de contratos com ADX 5m ativo", minval=0, maxval=10)
 sizing_cap = input.int(25, "Cap máximo de contratos", minval=5, maxval=100)
 
 session_end_h = input.int(17, "Hora limite pra abrir posição",  minval=10, maxval=17)
@@ -232,15 +233,17 @@ second_upper = (tocou(u0) and u0e >= 2) or (tocou(u50) and u50e >= 2) or (tocou(
 second_lower = (tocou(l0) and l0e >= 2) or (tocou(l50) and l50e >= 2) or (tocou(l100) and l100e >= 2) or (tocou(l150) and l150e >= 2) or (tocou(l200) and l200e >= 2) or (tocou(l250) and l250e >= 2) or (tocou(l300) and l300e >= 2) or (tocou(l350) and l350e >= 2) or (tocou(l400) and l400e >= 2) or (tocou(l450) and l450e >= 2)
 
 // ============================== INDICADORES =================================
-// Estoc 1m — confirmação de entrada
+// Estoc 1m — evento e "barssince cross"
 stoch_k = ta.stoch(close, high, low, 5)
 stoch_d = ta.sma(stoch_k, 3)
-stoch_up_recent = ta.barssince(ta.crossover(stoch_k, stoch_d)) < cross_win
-stoch_dn_recent = ta.barssince(ta.crossunder(stoch_k, stoch_d)) < cross_win
+stoch_cross_up = ta.crossover(stoch_k, stoch_d)
+stoch_cross_dn = ta.crossunder(stoch_k, stoch_d)
+stoch_bars_up  = ta.barssince(stoch_cross_up)
+stoch_bars_dn  = ta.barssince(stoch_cross_dn)
 
-// TRIX 5m — confirmação de entrada
-trix_up_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossover(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))) < cross_win)
-trix_dn_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossunder(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))) < cross_win)
+// TRIX 5m — barssince cross via request.security
+trix_bars_up_5m = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossover(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))))
+trix_bars_dn_5m = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossunder(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))))
 
 // ADX 5m — INTENSIFICADOR (só sizing, não gatilha entrada)
 adx5 = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[2])
@@ -263,17 +266,49 @@ cong_buy_score  = (adx15>adx_min and dip15>dim15 ? 1 : 0) + (adx30>adx_min and d
 cong_sell_score = (adx15>adx_min and dim15>dip15 ? 1 : 0) + (adx30>adx_min and dim30>dip30 ? 1 : 0) + (adx60>adx_min and dim60>dip60 ? 1 : 0)
 
 // ============================== GATILHO ====================================
-// Regra: 2ª batida no Fibo OBRIGATÓRIA. Confirmação = Estoc 1m OU TRIX 5m
-// (min_extras controla se basta 1 ou precisa dos 2). ADX 5m NÃO confirma
-// entrada — apenas intensifica sizing.
-buy_extras_score  = (stoch_up_recent ? 1 : 0) + (trix_up_recent ? 1 : 0)
-sell_extras_score = (stoch_dn_recent ? 1 : 0) + (trix_dn_recent ? 1 : 0)
+// Regra: 2ª batida no Fibo OBRIGATÓRIA. Confirmação Estoc 1m e/ou TRIX 5m
+// precisa acontecer APÓS o toque (não antes), dentro de wait_after_touch candles.
+// ADX 5m NÃO gatilha entrada — apenas intensifica sizing.
+
+var int bars_since_buy_touch  = 999999
+var int bars_since_sell_touch = 999999
+
+if is_new_day
+    bars_since_buy_touch  := 999999
+    bars_since_sell_touch := 999999
+
+bars_since_buy_touch  := bars_since_buy_touch  + 1
+bars_since_sell_touch := bars_since_sell_touch + 1
+
+if second_lower
+    bars_since_buy_touch := 0
+if second_upper
+    bars_since_sell_touch := 0
+
+buy_touch_window_open  = bars_since_buy_touch  <= wait_after_touch
+sell_touch_window_open = bars_since_sell_touch <= wait_after_touch
+
+// Cross válido: barssince(cross) < barssince(touch) → aconteceu APÓS o toque
+buy_stoch_after  = buy_touch_window_open  and stoch_bars_up  < bars_since_buy_touch
+buy_trix_after   = buy_touch_window_open  and trix_bars_up_5m < bars_since_buy_touch
+sell_stoch_after = sell_touch_window_open and stoch_bars_dn < bars_since_sell_touch
+sell_trix_after  = sell_touch_window_open and trix_bars_dn_5m < bars_since_sell_touch
+
+buy_extras_score  = (buy_stoch_after  ? 1 : 0) + (buy_trix_after  ? 1 : 0)
+sell_extras_score = (sell_stoch_after ? 1 : 0) + (sell_trix_after ? 1 : 0)
 
 buy_score  = (second_lower ? 1 : 0) + buy_extras_score
 sell_score = (second_upper ? 1 : 0) + sell_extras_score
 
-buy_signal_hit  = second_lower and buy_extras_score  >= min_extras
-sell_signal_hit = second_upper and sell_extras_score >= min_extras
+// Gatilho ao acumular confirmações pós-toque suficientes
+buy_signal_hit  = buy_touch_window_open  and bars_since_buy_touch  > 0 and buy_extras_score  >= min_extras
+sell_signal_hit = sell_touch_window_open and bars_since_sell_touch > 0 and sell_extras_score >= min_extras
+
+// Reset da janela após disparar (evita re-entradas no mesmo toque)
+if buy_signal_hit
+    bars_since_buy_touch := 999999
+if sell_signal_hit
+    bars_since_sell_touch := 999999
 
 // ============================== SESSION FILTER ==============================
 in_entry_window = (hour < session_end_h) or (hour == session_end_h and minute < session_end_m)
