@@ -29,9 +29,11 @@ show_alert   = input.bool(true, "Mostrar seta amarela de AVISO no 2º toque", gr
 adx_bonus    = input.int(5, "Bônus de contratos quando ADX 5m intensifica", group=grpSig, minval=0, maxval=10, tooltip="ADX 5m cruzou 30 pra cima OU está descendo entre 70-80 → +N contratos no sizing base (capado em 25).")
 sizing_cap   = input.int(25, "Cap máximo de contratos",                  group=grpSig, minval=5, maxval=100)
 
-grp5m = "Setas MTF — 5min"
-show_5m_ind = input.bool(true, "5m — sinais individuais (Estoc/TRIX/ADX/DMI)", group=grp5m)
-show_5m_cmb = input.bool(true, "5m — sinal combinado (4 alinhados)",           group=grp5m)
+grpMTF = "Setas MTF (Setup por Timeframe)"
+show_5m_cmb  = input.bool(true, "5m — sinal combinado (Estoc+TRIX+ADX+DMI alinhados)",  group=grpMTF)
+show_15m_cmb = input.bool(true, "15m — sinal combinado",                                group=grpMTF)
+show_30m_cmb = input.bool(true, "30m — sinal combinado",                                group=grpMTF)
+show_60m_cmb = input.bool(true, "60m — sinal combinado",                                group=grpMTF)
 
 grpPnl     = "Painel"
 show_panel = input.bool(true, "Mostrar painel de sinais",           group=grpPnl)
@@ -146,40 +148,48 @@ trix1m_ma  = ta.sma(trix1m_val, 4)
 trix1m_cross_up = ta.crossover(trix1m_val, trix1m_ma)
 trix1m_cross_dn = ta.crossunder(trix1m_val, trix1m_ma)
 
-// ============================== EVENTOS MTF 5min =============================
-get_5m_events() =>
-    k5 = ta.stoch(close, high, low, 5)
-    d5 = ta.sma(k5, 3)
-    stoch_up = ta.crossover(k5, d5)
-    stoch_dn = ta.crossunder(k5, d5)
-    stoch_st_buy  = k5 > d5
-    stoch_st_sell = k5 < d5
+// ============================== SETUPS MTF POR TIMEFRAME =====================
+// Cada TF é um setup completo com 4 indicadores (Estoc + TRIX + ADX + DMI) daquele TF.
+// Sinal combinado dispara na TRANSIÇÃO para "todos os 4 alinhados na mesma direção".
+get_htf_states() =>
+    k = ta.stoch(close, high, low, 5)
+    d = ta.sma(k, 3)
+    stoch_b = k > d
+    stoch_s = k < d
     tv = trix_calc(close, 9)
     tm = ta.sma(tv, 4)
-    trix_up = ta.crossover(tv, tm)
-    trix_dn = ta.crossunder(tv, tm)
-    trix_st_buy  = tv > tm
-    trix_st_sell = tv < tm
+    trix_b = tv > tm
+    trix_s = tv < tm
     [dp, dn, av] = ta.dmi(8, 8)
-    adx_cross30 = ta.crossover(av, 30)
-    adx_band_ev = av > 70 and av < 80 and av < av[1] and not (av[1] > 70 and av[1] < 80 and av[1] < av[2])
-    adx_active_st = ta.barssince(ta.crossover(av, 30)) < 3 or (av > 70 and av < 80 and av < av[1])
-    dmi_buy_st  = dp > dn
-    dmi_sell_st = dn > dp
-    [stoch_up, stoch_dn, trix_up, trix_dn, adx_cross30, adx_band_ev, stoch_st_buy, stoch_st_sell, trix_st_buy, trix_st_sell, adx_active_st, dmi_buy_st, dmi_sell_st]
+    adx_a = ta.barssince(ta.crossover(av, 30)) < 3 or (av > 70 and av < 80 and av < av[1])
+    dmi_b = dp > dn
+    dmi_s = dn > dp
+    [stoch_b, stoch_s, trix_b, trix_s, adx_a, dmi_b, dmi_s]
 
-[e5_stoch_up, e5_stoch_dn, e5_trix_up, e5_trix_dn, e5_adx_c30, e5_adx_band, s5_stoch_b, s5_stoch_s, s5_trix_b, s5_trix_s, s5_adx_a, s5_dmi_b, s5_dmi_s] = request.security(syminfo.tickerid, "5", get_5m_events(), lookahead=barmerge.lookahead_off)
+[s5_stoch_b, s5_stoch_s, s5_trix_b, s5_trix_s, s5_adx_a, s5_dmi_b, s5_dmi_s]         = request.security(syminfo.tickerid, "5",  get_htf_states(), lookahead=barmerge.lookahead_off)
+[s15_stoch_b, s15_stoch_s, s15_trix_b, s15_trix_s, s15_adx_a, s15_dmi_b, s15_dmi_s]  = request.security(syminfo.tickerid, "15", get_htf_states(), lookahead=barmerge.lookahead_off)
+[s30_stoch_b, s30_stoch_s, s30_trix_b, s30_trix_s, s30_adx_a, s30_dmi_b, s30_dmi_s]  = request.security(syminfo.tickerid, "30", get_htf_states(), lookahead=barmerge.lookahead_off)
+[s60_stoch_b, s60_stoch_s, s60_trix_b, s60_trix_s, s60_adx_a, s60_dmi_b, s60_dmi_s]  = request.security(syminfo.tickerid, "60", get_htf_states(), lookahead=barmerge.lookahead_off)
 
-sig5_estoc_buy  = e5_stoch_up
-sig5_estoc_sell = e5_stoch_dn
-sig5_trix_buy   = e5_trix_up
-sig5_trix_sell  = e5_trix_dn
-sig5_adx_ev     = e5_adx_c30 or e5_adx_band
+// Combinado por TF: 4 states alinhados na mesma direção
+cmb_5m_buy_st   = s5_stoch_b  and s5_trix_b  and s5_adx_a  and s5_dmi_b
+cmb_5m_sell_st  = s5_stoch_s  and s5_trix_s  and s5_adx_a  and s5_dmi_s
+cmb_15m_buy_st  = s15_stoch_b and s15_trix_b and s15_adx_a and s15_dmi_b
+cmb_15m_sell_st = s15_stoch_s and s15_trix_s and s15_adx_a and s15_dmi_s
+cmb_30m_buy_st  = s30_stoch_b and s30_trix_b and s30_adx_a and s30_dmi_b
+cmb_30m_sell_st = s30_stoch_s and s30_trix_s and s30_adx_a and s30_dmi_s
+cmb_60m_buy_st  = s60_stoch_b and s60_trix_b and s60_adx_a and s60_dmi_b
+cmb_60m_sell_st = s60_stoch_s and s60_trix_s and s60_adx_a and s60_dmi_s
 
-combined_5m_buy_st  = s5_stoch_b and s5_trix_b and s5_adx_a and s5_dmi_b
-combined_5m_sell_st = s5_stoch_s and s5_trix_s and s5_adx_a and s5_dmi_s
-sig5_combined_buy   = combined_5m_buy_st  and not combined_5m_buy_st[1]
-sig5_combined_sell  = combined_5m_sell_st and not combined_5m_sell_st[1]
+// Sinal = transição (não persiste em candles seguintes)
+sig_5m_buy   = cmb_5m_buy_st   and not cmb_5m_buy_st[1]
+sig_5m_sell  = cmb_5m_sell_st  and not cmb_5m_sell_st[1]
+sig_15m_buy  = cmb_15m_buy_st  and not cmb_15m_buy_st[1]
+sig_15m_sell = cmb_15m_sell_st and not cmb_15m_sell_st[1]
+sig_30m_buy  = cmb_30m_buy_st  and not cmb_30m_buy_st[1]
+sig_30m_sell = cmb_30m_sell_st and not cmb_30m_sell_st[1]
+sig_60m_buy  = cmb_60m_buy_st  and not cmb_60m_buy_st[1]
+sig_60m_sell = cmb_60m_sell_st and not cmb_60m_sell_st[1]
 
 // ============================== CONGRUÊNCIA MTF (regra completa por TF) =====
 // Cada TF é "ativo direcional" quando:
@@ -596,19 +606,14 @@ plot(sell_score,      title="sell_score",      display=display.none)
 plot(cong_buy_score,  title="cong_buy_score",  display=display.none)
 plot(cong_sell_score, title="cong_sell_score", display=display.none)
 
-// ============================== SETAS MTF 5min ===============================
-// Cor 5m: azul-claro (aqua). Formatos distintos por indicador.
-c5m = color.new(color.aqua, 20)
-
-// Individuais (toggleable)
-plotshape(show_5m_ind and sig5_estoc_buy,  title="5m Estoc BUY",  location=location.belowbar, color=c5m, style=shape.circle,      size=size.tiny, text="e5")
-plotshape(show_5m_ind and sig5_estoc_sell, title="5m Estoc SELL", location=location.abovebar, color=c5m, style=shape.circle,      size=size.tiny, text="e5")
-plotshape(show_5m_ind and sig5_trix_buy,   title="5m TRIX BUY",   location=location.belowbar, color=c5m, style=shape.square,      size=size.tiny, text="t5")
-plotshape(show_5m_ind and sig5_trix_sell,  title="5m TRIX SELL",  location=location.abovebar, color=c5m, style=shape.square,      size=size.tiny, text="t5")
-plotshape(show_5m_ind and sig5_adx_ev,     title="5m ADX evento", location=location.abovebar, color=c5m, style=shape.diamond,     size=size.tiny, text="a5")
-plotshape(show_5m_ind and s5_dmi_b and not s5_dmi_b[1], title="5m DMI BUY",  location=location.belowbar, color=c5m, style=shape.triangleup,   size=size.tiny, text="d5")
-plotshape(show_5m_ind and s5_dmi_s and not s5_dmi_s[1], title="5m DMI SELL", location=location.abovebar, color=c5m, style=shape.triangledown, size=size.tiny, text="d5")
-
-// Combinado 5m (toggleable) — quando os 4 alinham
-plotshape(show_5m_cmb and sig5_combined_buy,  title="5m COMBINADO BUY",  location=location.belowbar, color=color.new(color.aqua, 0), style=shape.arrowup,   size=size.small, text="★5m")
-plotshape(show_5m_cmb and sig5_combined_sell, title="5m COMBINADO SELL", location=location.abovebar, color=color.new(color.aqua, 0), style=shape.arrowdown, size=size.small, text="★5m")
+// ============================== SETAS MTF (4 TFs) ============================
+// Sinal COMBINADO por TF: dispara na transição para "os 4 indicadores alinhados".
+// Cores por TF: 5m=aqua · 15m=verde · 30m=laranja · 60m=roxo
+plotshape(show_5m_cmb  and sig_5m_buy,   title="5m BUY",   location=location.belowbar, color=color.new(color.aqua,    0), style=shape.arrowup,   size=size.small, text="5m")
+plotshape(show_5m_cmb  and sig_5m_sell,  title="5m SELL",  location=location.abovebar, color=color.new(color.aqua,    0), style=shape.arrowdown, size=size.small, text="5m")
+plotshape(show_15m_cmb and sig_15m_buy,  title="15m BUY",  location=location.belowbar, color=color.new(color.lime,    0), style=shape.arrowup,   size=size.small, text="15m")
+plotshape(show_15m_cmb and sig_15m_sell, title="15m SELL", location=location.abovebar, color=color.new(color.lime,    0), style=shape.arrowdown, size=size.small, text="15m")
+plotshape(show_30m_cmb and sig_30m_buy,  title="30m BUY",  location=location.belowbar, color=color.new(color.orange,  0), style=shape.arrowup,   size=size.small, text="30m")
+plotshape(show_30m_cmb and sig_30m_sell, title="30m SELL", location=location.abovebar, color=color.new(color.orange,  0), style=shape.arrowdown, size=size.small, text="30m")
+plotshape(show_60m_cmb and sig_60m_buy,  title="60m BUY",  location=location.belowbar, color=color.new(color.purple,  0), style=shape.arrowup,   size=size.small, text="60m")
+plotshape(show_60m_cmb and sig_60m_sell, title="60m SELL", location=location.abovebar, color=color.new(color.purple,  0), style=shape.arrowdown, size=size.small, text="60m")
