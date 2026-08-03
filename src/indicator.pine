@@ -57,6 +57,7 @@ fib_level(direction, pct) =>
 
 // Níveis Fibo (Pine v5: uma declaração por linha)
 u0 = fib_level("upper", 0)
+umid = (first5_high + first5_low) / 2   // ★ meio do 1º candle 5min
 u50 = fib_level("upper", 50)
 u100 = fib_level("upper", 100)
 u150 = fib_level("upper", 150)
@@ -81,8 +82,11 @@ color_sup      = color.new(color.blue, 60)
 color_res      = color.new(color.red,  60)
 color_sup_mid  = color.new(color.blue, 0)   // sem transparência
 color_res_mid  = color.new(color.red,  0)
+color_extremo  = color.new(color.black, 0)  // extremos R0/S0 do 1º candle 5min
+color_mid_1st  = color.new(color.orange, 0) // meio do 1º candle 5min
 
-plot(show_fibo and has_base ? u0   : na, "R0",       color=color_res)
+plot(show_fibo and has_base ? u0   : na, "★ R0 (topo 1º 5m)", color=color_extremo, linewidth=2)
+plot(show_fibo and has_base ? umid : na, "★ MID (meio 1º 5m)", color=color_mid_1st, linewidth=2)
 plot(show_fibo and has_base ? u50  : na, "★ R50",    color=color_res_mid, linewidth=2)
 plot(show_fibo and has_base ? u100 : na, "R100",     color=color_res)
 plot(show_fibo and has_base ? u150 : na, "R150", color=color_res)
@@ -92,7 +96,7 @@ plot(show_fibo and has_base and show_all ? u300 : na, "R300", color=color_res)
 plot(show_fibo and has_base and show_all ? u350 : na, "R350", color=color_res)
 plot(show_fibo and has_base and show_all ? u400 : na, "R400", color=color_res)
 plot(show_fibo and has_base and show_all ? u450 : na, "R450", color=color_res)
-plot(show_fibo and has_base ? l0   : na, "S0",       color=color_sup)
+plot(show_fibo and has_base ? l0   : na, "★ S0 (base 1º 5m)", color=color_extremo, linewidth=2)
 plot(show_fibo and has_base ? l50  : na, "★ S50",    color=color_sup_mid, linewidth=2)
 plot(show_fibo and has_base ? l100 : na, "S100",     color=color_sup)
 plot(show_fibo and has_base ? l150 : na, "S150", color=color_sup)

@@ -47,6 +47,7 @@ has_base = not na(first5_high) and not na(fib_range) and fib_range > 0
 lvl(dir, pct) => dir == "upper" ? first5_high + (pct/100.0) * fib_range : first5_low - (pct/100.0) * fib_range
 
 u0   = lvl("upper", 0)
+umid = (first5_high + first5_low) / 2   // ★ meio do 1º candle 5min
 u50  = lvl("upper", 50)
 u100 = lvl("upper", 100)
 u150 = lvl("upper", 150)
@@ -453,6 +454,9 @@ if in_eod_window and strategy.position_size != 0
     strategy.close_all(comment="EOD")
 
 // ============================== PLOTS =======================================
+plot(has_base ? u0   : na, "★ R0 (topo 1º 5m)",  color=color.new(color.black,  0), linewidth=2)
+plot(has_base ? umid : na, "★ MID (meio 1º 5m)", color=color.new(color.orange, 0), linewidth=2)
+plot(has_base ? l0   : na, "★ S0 (base 1º 5m)",  color=color.new(color.black,  0), linewidth=2)
 plot(has_base ? u100 : na, "R100", color=color.new(color.red, 60))
 plot(has_base ? u200 : na, "R200", color=color.new(color.red, 60))
 plot(has_base ? u300 : na, "R300", color=color.new(color.red, 60))
