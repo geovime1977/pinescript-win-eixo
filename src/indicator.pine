@@ -494,9 +494,10 @@ if show_panel and barstate.islast
 // Uso: buy_cond1[1] = "havia âncora no candle anterior";
 //      buy_extras_score >= min_extras neste candle = "acaba de confirmar agora"
 
-// Confirmação AGORA = janela aberta há > 0 candles (toque foi ANTES) + extras suficientes AGORA
-buy_confirmed_now  = buy_second_touch_ago  > 0 and buy_touch_window_open  and buy_extras_score  >= min_extras and bars_since_buy_sig  > sig_cooldown
-sell_confirmed_now = sell_second_touch_ago > 0 and sell_touch_window_open and sell_extras_score >= min_extras and bars_since_sell_sig > sig_cooldown
+// Confirmação AGORA = usa buy_signal_new que já leva cooldown em conta
+// (evita bug: bars_since_buy_sig é resetado antes desta linha ser avaliada)
+buy_confirmed_now  = buy_signal_new
+sell_confirmed_now = sell_signal_new
 
 // Seta amarela de AVISO no candle do toque (antes de qualquer confirmação)
 plotshape(show_alert and fibo_touch_buy_alert,  title="AVISO 2º toque SUP", location=location.belowbar, color=color.yellow, style=shape.diamond, size=size.tiny, text="!")
