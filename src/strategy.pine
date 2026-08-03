@@ -234,6 +234,13 @@ second_upper = (tocou(u0) and u0e >= 2) or (tocou(u50) and u50e >= 2) or (tocou(
 second_lower = (tocou(l0) and l0e >= 2) or (tocou(l50) and l50e >= 2) or (tocou(l100) and l100e >= 2) or (tocou(l150) and l150e >= 2) or (tocou(l200) and l200e >= 2) or (tocou(l250) and l250e >= 2) or (tocou(l300) and l300e >= 2) or (tocou(l350) and l350e >= 2) or (tocou(l400) and l400e >= 2) or (tocou(l450) and l450e >= 2)
 
 // ============================== INDICADORES =================================
+// TRIX manual (Pine v5 não tem ta.trix nativo)
+trix_calc(src, len) =>
+    e1 = ta.ema(src, len)
+    e2 = ta.ema(e1, len)
+    e3 = ta.ema(e2, len)
+    ta.roc(e3, 1)
+
 // Estoc 1m — evento e "barssince cross"
 stoch_k = ta.stoch(close, high, low, 5)
 stoch_d = ta.sma(stoch_k, 3)
@@ -242,20 +249,22 @@ stoch_cross_dn = ta.crossunder(stoch_k, stoch_d)
 stoch_bars_up  = ta.barssince(stoch_cross_up)
 stoch_bars_dn  = ta.barssince(stoch_cross_dn)
 
-// TRIX 5m — barssince cross via request.security
-trix_bars_up_5m = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossover(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))))
-trix_bars_dn_5m = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossunder(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))))
+// TRIX 5m + ADX 5m + DMI 5m via helper (Pine v5 exige função pra tuple no request.security)
+get_5m() =>
+    tv = trix_calc(close, 9)
+    tm = ta.sma(tv, 4)
+    tbu = ta.barssince(ta.crossover(tv, tm))
+    tbd = ta.barssince(ta.crossunder(tv, tm))
+    [dp, dn, av] = ta.dmi(8, 8)
+    up30r = ta.barssince(ta.crossover(av, 30)) < 3
+    band  = av > 70 and av < 80 and av < av[1]
+    [tbu, tbd, av, dp, dn, up30r, band]
 
-// ADX 5m — INTENSIFICADOR (sizing) + entra na congruência 4/4
-adx5 = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[2])
-dmp5 = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[0])
-dmn5 = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[1])
-adx_up_30_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossover(ta.dmi(8, 8)[2], 30)) < 3)
-adx_band_dn = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[2] > 70 and ta.dmi(8, 8)[2] < 80 and ta.dmi(8, 8)[2] < ta.dmi(8, 8)[2][1])
+[trix_bars_up_5m, trix_bars_dn_5m, adx5, dmp5, dmn5, adx_up_30_recent, adx_band_dn] = request.security(syminfo.tickerid, "5", get_5m(), lookahead=barmerge.lookahead_off)
 adx_intensifier = adx_up_30_recent or adx_band_dn
 
 // TRIX 1m — SAÍDA (2º cruzamento contra o trade)
-trix1m_val = ta.trix(close, 9)
+trix1m_val = trix_calc(close, 9)
 trix1m_ma  = ta.sma(trix1m_val, 4)
 trix1m_cross_up = ta.crossover(trix1m_val, trix1m_ma)
 trix1m_cross_dn = ta.crossunder(trix1m_val, trix1m_ma)

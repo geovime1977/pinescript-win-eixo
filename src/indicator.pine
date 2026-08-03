@@ -509,8 +509,8 @@ plotshape(sell_confirmed_now, title="GATILHO VENDA",  location=location.abovebar
 // Sinal PREMIUM 4/4 — estrela dourada quando congruência total (5+15+30+60) alinha
 buy_confirmed_44  = buy_confirmed_now  and cong44_buy_score  == 4
 sell_confirmed_44 = sell_confirmed_now and cong44_sell_score == 4
-plotshape(buy_confirmed_44,  title="4/4 COMPRA PREMIUM", location=location.belowbar, color=color.yellow, style=shape.star, size=size.normal, text="★ 4/4 BUY",  offset=-1)
-plotshape(sell_confirmed_44, title="4/4 VENDA PREMIUM",  location=location.abovebar, color=color.yellow, style=shape.star, size=size.normal, text="★ 4/4 SELL", offset=-1)
+plotshape(buy_confirmed_44,  title="4/4 COMPRA PREMIUM", location=location.belowbar, color=color.yellow, style=shape.arrowup, size=size.normal, text="★ 4/4 BUY",  offset=-1)
+plotshape(sell_confirmed_44, title="4/4 VENDA PREMIUM",  location=location.abovebar, color=color.yellow, style=shape.arrowdown, size=size.normal, text="★ 4/4 SELL", offset=-1)
 
 alertcondition(fibo_touch_buy_alert or fibo_touch_sell_alert,
      title="Eixo WIN — Aviso 2º toque",
