@@ -3,11 +3,11 @@
 // Eixo Estratégico — WIN Day Trade | Strategy Backtestable
 // -----------------------------------------------------------------------------
 // APLICAR NO GRÁFICO DE 1 MINUTO DO ATIVO WIN.
-// Versão backtest: entra em 4/4 e sai por scale-out em cada Fibo tocado.
+// Versão backtest: entra quando score >= min_score (default 2/4) e sai por scale-out em cada Fibo tocado.
 // Sizing por congruência: 5/10/15/20 contratos.
 // -----------------------------------------------------------------------------
 
-strategy("Eixo WIN — Strategy 4/4", overlay=true,
+strategy("Eixo WIN — Strategy X/4", overlay=true,
      initial_capital=100000,
      default_qty_type=strategy.fixed,
      default_qty_value=1,
@@ -19,10 +19,13 @@ strategy("Eixo WIN — Strategy 4/4", overlay=true,
      slippage=1)
 
 // ============================== PARÂMETROS ==================================
-tol_pct   = input.float(0.05,  "Tolerância de toque (%)",    minval=0.01, step=0.01)
-cross_win = input.int(3, "Janela de cruzamento (candles)", minval=1, maxval=10)
-gap_bars  = input.int(3, "Gap mínimo entre eventos",         minval=1, maxval=20)
-adx_min   = input.float(25.0, "ADX mín. congruência TF sup", step=1)
+tol_pct    = input.float(0.05, "Tolerância de toque (%)",    minval=0.01, step=0.01)
+cross_win  = input.int(3, "Janela de iniciação (candles)",  minval=1, maxval=10)
+gap_bars   = input.int(3, "Gap mínimo entre eventos",       minval=1, maxval=20)
+adx_min    = input.float(25.0, "ADX mín. congruência TF sup", step=1)
+min_extras = input.int(1, "Mín. confirmações (Estoc 1m / TRIX 5m)", minval=1, maxval=2)
+adx_bonus  = input.int(5, "Bônus de contratos com ADX 5m ativo", minval=0, maxval=10)
+sizing_cap = input.int(25, "Cap máximo de contratos", minval=5, maxval=100)
 
 session_end_h = input.int(17, "Hora limite pra abrir posição",  minval=10, maxval=17)
 session_end_m = input.int(30, "Minuto limite pra abrir",         minval=0,  maxval=59)
@@ -107,17 +110,27 @@ second_upper = (tocou(u0) and u0e>=2) or (tocou(u50) and u50e>=2) or (tocou(u100
 second_lower = (tocou(l0) and l0e>=2) or (tocou(l50) and l50e>=2) or (tocou(l100) and l100e>=2) or (tocou(l150) and l150e>=2) or (tocou(l200) and l200e>=2) or (tocou(l250) and l250e>=2) or (tocou(l300) and l300e>=2) or (tocou(l350) and l350e>=2) or (tocou(l400) and l400e>=2) or (tocou(l450) and l450e>=2)
 
 // ============================== INDICADORES =================================
+// Estoc 1m — confirmação de entrada
 stoch_k = ta.stoch(close, high, low, 5)
 stoch_d = ta.sma(stoch_k, 3)
 stoch_up_recent = ta.barssince(ta.crossover(stoch_k, stoch_d)) < cross_win
 stoch_dn_recent = ta.barssince(ta.crossunder(stoch_k, stoch_d)) < cross_win
 
+// TRIX 5m — confirmação de entrada
 trix_up_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossover(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))) < cross_win)
 trix_dn_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossunder(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))) < cross_win)
 
+// ADX 5m — INTENSIFICADOR (só sizing, não gatilha entrada)
 adx5 = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[2])
-adx_dn_80_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossunder(ta.dmi(8, 8)[2], 80)) < cross_win)
-adx_entry_ok = adx5 > 30 or adx_dn_80_recent
+adx_up_30_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossover(ta.dmi(8, 8)[2], 30)) < cross_win)
+adx_band_dn = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[2] > 70 and ta.dmi(8, 8)[2] < 80 and ta.dmi(8, 8)[2] < ta.dmi(8, 8)[2][1])
+adx_intensifier = adx_up_30_recent or adx_band_dn
+
+// TRIX 1m — SAÍDA (2º cruzamento contra o trade)
+trix1m_val = ta.trix(close, 9)
+trix1m_ma  = ta.sma(trix1m_val, 4)
+trix1m_cross_up = ta.crossover(trix1m_val, trix1m_ma)
+trix1m_cross_dn = ta.crossunder(trix1m_val, trix1m_ma)
 
 // ============================== CONGRUÊNCIA MTF =============================
 [dip15, dim15, adx15] = request.security(syminfo.tickerid, "15", ta.dmi(8, 8))
@@ -127,59 +140,100 @@ adx_entry_ok = adx5 > 30 or adx_dn_80_recent
 cong_buy_score  = (adx15>adx_min and dip15>dim15 ? 1 : 0) + (adx30>adx_min and dip30>dim30 ? 1 : 0) + (adx60>adx_min and dip60>dim60 ? 1 : 0)
 cong_sell_score = (adx15>adx_min and dim15>dip15 ? 1 : 0) + (adx30>adx_min and dim30>dip30 ? 1 : 0) + (adx60>adx_min and dim60>dip60 ? 1 : 0)
 
-// ============================== SCORE 4/4 ===================================
-buy_signal_44  = second_lower and stoch_up_recent and trix_up_recent and adx_entry_ok
-sell_signal_44 = second_upper and stoch_dn_recent and trix_dn_recent and adx_entry_ok
+// ============================== GATILHO ====================================
+// Regra: 2ª batida no Fibo OBRIGATÓRIA. Confirmação = Estoc 1m OU TRIX 5m
+// (min_extras controla se basta 1 ou precisa dos 2). ADX 5m NÃO confirma
+// entrada — apenas intensifica sizing.
+buy_extras_score  = (stoch_up_recent ? 1 : 0) + (trix_up_recent ? 1 : 0)
+sell_extras_score = (stoch_dn_recent ? 1 : 0) + (trix_dn_recent ? 1 : 0)
+
+buy_score  = (second_lower ? 1 : 0) + buy_extras_score
+sell_score = (second_upper ? 1 : 0) + sell_extras_score
+
+buy_signal_hit  = second_lower and buy_extras_score  >= min_extras
+sell_signal_hit = second_upper and sell_extras_score >= min_extras
 
 // ============================== SESSION FILTER ==============================
 in_entry_window = (hour < session_end_h) or (hour == session_end_h and minute < session_end_m)
 in_eod_window   = (hour > force_close_h) or (hour == force_close_h and minute >= force_close_m)
 
 // ============================== SIZING ======================================
-sizing_contratos(cong) => cong == 3 ? 20 : cong == 2 ? 15 : cong == 1 ? 10 : 5
+sizing_base(cong) => cong == 3 ? 20 : cong == 2 ? 15 : cong == 1 ? 10 : 5
+sizing_contratos(cong) => math.min(sizing_cap, sizing_base(cong) + (adx_intensifier ? adx_bonus : 0))
 
 // ============================== ENTRADAS ====================================
-// Compra: 4/4 buy + em janela + sem posição aberta
-if buy_signal_44 and in_entry_window and strategy.position_size == 0 and has_base
-    qty = sizing_contratos(cong_buy_score)
-    strategy.entry("Long", strategy.long, qty=qty, comment="4/4 Buy cong=" + str.tostring(cong_buy_score))
-    // Stop no Fibo anterior (aprox: 100 pontos abaixo da entrada)
-    stop_price = close - fib_range * 0.5
-    // Scale-out em cada Fibo alcançado
-    // Divide em 4 targets pro caso cong=3, 3 pra cong=2, 2 pra cong=1, 1 pra cong=0
-    if cong_buy_score == 3
-        strategy.exit("T1", from_entry="Long", qty_percent=25, limit=lvl("upper", 100), stop=stop_price)
-        strategy.exit("T2", from_entry="Long", qty_percent=33, limit=lvl("upper", 200), stop=stop_price)
-        strategy.exit("T3", from_entry="Long", qty_percent=50, limit=lvl("upper", 300), stop=stop_price)
-        strategy.exit("T4", from_entry="Long", limit=lvl("upper", 450), stop=stop_price)
-    else if cong_buy_score == 2
-        strategy.exit("T1", from_entry="Long", qty_percent=33, limit=lvl("upper", 100), stop=stop_price)
-        strategy.exit("T2", from_entry="Long", qty_percent=50, limit=lvl("upper", 200), stop=stop_price)
-        strategy.exit("T3", from_entry="Long", limit=lvl("upper", 350), stop=stop_price)
-    else if cong_buy_score == 1
-        strategy.exit("T1", from_entry="Long", qty_percent=50, limit=lvl("upper", 100), stop=stop_price)
-        strategy.exit("T2", from_entry="Long", limit=lvl("upper", 250), stop=stop_price)
-    else
-        strategy.exit("T1", from_entry="Long", limit=lvl("upper", 50), stop=stop_price)
+// 10 targets iguais para todos os cong: 0, 50, 100, 150, 200, 250, 300, 350, 400, 450
+// qty por target = floor(total/10), min 1; T10 fecha o remainder.
 
-if sell_signal_44 and in_entry_window and strategy.position_size == 0 and has_base
-    qty = sizing_contratos(cong_sell_score)
-    strategy.entry("Short", strategy.short, qty=qty, comment="4/4 Sell cong=" + str.tostring(cong_sell_score))
+if buy_signal_hit and in_entry_window and strategy.position_size == 0 and has_base
+    qty_total = sizing_contratos(cong_buy_score)
+    strategy.entry("Long", strategy.long, qty=qty_total, comment=str.tostring(buy_score) + "/4 Buy cong=" + str.tostring(cong_buy_score))
+    stop_price = close - fib_range * 0.5
+    qty_t = math.max(1, int(math.floor(qty_total / 10.0)))
+    strategy.exit("T1",  from_entry="Long", qty=qty_t, limit=lvl("upper",   0), stop=stop_price)
+    strategy.exit("T2",  from_entry="Long", qty=qty_t, limit=lvl("upper",  50), stop=stop_price)
+    strategy.exit("T3",  from_entry="Long", qty=qty_t, limit=lvl("upper", 100), stop=stop_price)
+    strategy.exit("T4",  from_entry="Long", qty=qty_t, limit=lvl("upper", 150), stop=stop_price)
+    strategy.exit("T5",  from_entry="Long", qty=qty_t, limit=lvl("upper", 200), stop=stop_price)
+    strategy.exit("T6",  from_entry="Long", qty=qty_t, limit=lvl("upper", 250), stop=stop_price)
+    strategy.exit("T7",  from_entry="Long", qty=qty_t, limit=lvl("upper", 300), stop=stop_price)
+    strategy.exit("T8",  from_entry="Long", qty=qty_t, limit=lvl("upper", 350), stop=stop_price)
+    strategy.exit("T9",  from_entry="Long", qty=qty_t, limit=lvl("upper", 400), stop=stop_price)
+    strategy.exit("T10", from_entry="Long",            limit=lvl("upper", 450), stop=stop_price)
+
+if sell_signal_hit and in_entry_window and strategy.position_size == 0 and has_base
+    qty_total = sizing_contratos(cong_sell_score)
+    strategy.entry("Short", strategy.short, qty=qty_total, comment=str.tostring(sell_score) + "/4 Sell cong=" + str.tostring(cong_sell_score))
     stop_price = close + fib_range * 0.5
-    if cong_sell_score == 3
-        strategy.exit("T1", from_entry="Short", qty_percent=25, limit=lvl("lower", 100), stop=stop_price)
-        strategy.exit("T2", from_entry="Short", qty_percent=33, limit=lvl("lower", 200), stop=stop_price)
-        strategy.exit("T3", from_entry="Short", qty_percent=50, limit=lvl("lower", 300), stop=stop_price)
-        strategy.exit("T4", from_entry="Short", limit=lvl("lower", 450), stop=stop_price)
-    else if cong_sell_score == 2
-        strategy.exit("T1", from_entry="Short", qty_percent=33, limit=lvl("lower", 100), stop=stop_price)
-        strategy.exit("T2", from_entry="Short", qty_percent=50, limit=lvl("lower", 200), stop=stop_price)
-        strategy.exit("T3", from_entry="Short", limit=lvl("lower", 350), stop=stop_price)
-    else if cong_sell_score == 1
-        strategy.exit("T1", from_entry="Short", qty_percent=50, limit=lvl("lower", 100), stop=stop_price)
-        strategy.exit("T2", from_entry="Short", limit=lvl("lower", 250), stop=stop_price)
-    else
-        strategy.exit("T1", from_entry="Short", limit=lvl("lower", 50), stop=stop_price)
+    qty_t = math.max(1, int(math.floor(qty_total / 10.0)))
+    strategy.exit("T1",  from_entry="Short", qty=qty_t, limit=lvl("lower",   0), stop=stop_price)
+    strategy.exit("T2",  from_entry="Short", qty=qty_t, limit=lvl("lower",  50), stop=stop_price)
+    strategy.exit("T3",  from_entry="Short", qty=qty_t, limit=lvl("lower", 100), stop=stop_price)
+    strategy.exit("T4",  from_entry="Short", qty=qty_t, limit=lvl("lower", 150), stop=stop_price)
+    strategy.exit("T5",  from_entry="Short", qty=qty_t, limit=lvl("lower", 200), stop=stop_price)
+    strategy.exit("T6",  from_entry="Short", qty=qty_t, limit=lvl("lower", 250), stop=stop_price)
+    strategy.exit("T7",  from_entry="Short", qty=qty_t, limit=lvl("lower", 300), stop=stop_price)
+    strategy.exit("T8",  from_entry="Short", qty=qty_t, limit=lvl("lower", 350), stop=stop_price)
+    strategy.exit("T9",  from_entry="Short", qty=qty_t, limit=lvl("lower", 400), stop=stop_price)
+    strategy.exit("T10", from_entry="Short",            limit=lvl("lower", 450), stop=stop_price)
+
+// ============================== SAÍDA ANTECIPADA — 2 FASES ==================
+// FASE 1 (ARMA): 2º cruzamento do TRIX 1m contra a direção do trade →
+//                seta bandeira "exit_armed", mas não fecha ainda.
+// FASE 2 (DISPARA): estando armada, quando preço tocar em algum Fibo no
+//                gráfico 1min → close_all.
+// Contadores e flags resetam a cada nova entrada.
+var int  long_trix_dn_count  = 0
+var int  short_trix_up_count = 0
+var bool long_exit_armed     = false
+var bool short_exit_armed    = false
+
+// Reset ao ficar flat
+if strategy.position_size == 0
+    long_trix_dn_count  := 0
+    short_trix_up_count := 0
+    long_exit_armed     := false
+    short_exit_armed    := false
+
+// Conta crosses contrários enquanto posição aberta
+if strategy.position_size > 0 and trix1m_cross_dn
+    long_trix_dn_count := long_trix_dn_count + 1
+if strategy.position_size < 0 and trix1m_cross_up
+    short_trix_up_count := short_trix_up_count + 1
+
+// FASE 1: 2º contrário = ARMA (não fecha ainda)
+if strategy.position_size > 0 and long_trix_dn_count >= 2
+    long_exit_armed := true
+if strategy.position_size < 0 and short_trix_up_count >= 2
+    short_exit_armed := true
+
+// FASE 2: armado + toque em QUALQUER Fibo (1min) = DISPARA
+any_fibo_touch = tocou(u0) or tocou(u50) or tocou(u100) or tocou(u150) or tocou(u200) or tocou(u250) or tocou(u300) or tocou(u350) or tocou(u400) or tocou(u450) or tocou(l0) or tocou(l50) or tocou(l100) or tocou(l150) or tocou(l200) or tocou(l250) or tocou(l300) or tocou(l350) or tocou(l400) or tocou(l450)
+
+if long_exit_armed and any_fibo_touch
+    strategy.close_all(comment="2ºTRIX1m↓ + FiboTouch")
+if short_exit_armed and any_fibo_touch
+    strategy.close_all(comment="2ºTRIX1m↑ + FiboTouch")
 
 // EOD close forçado
 if in_eod_window and strategy.position_size != 0
@@ -193,5 +247,5 @@ plot(has_base ? l100 : na, "S100", color=color.new(color.blue, 60))
 plot(has_base ? l200 : na, "S200", color=color.new(color.blue, 60))
 plot(has_base ? l300 : na, "S300", color=color.new(color.blue, 60))
 
-plotshape(buy_signal_44,  title="BUY 4/4",  location=location.belowbar, color=color.green, style=shape.triangleup,   size=size.small)
-plotshape(sell_signal_44, title="SELL 4/4", location=location.abovebar, color=color.red,   style=shape.triangledown, size=size.small)
+plotshape(buy_signal_hit,  title="BUY hit",  location=location.belowbar, color=color.green, style=shape.triangleup,   size=size.small)
+plotshape(sell_signal_hit, title="SELL hit", location=location.abovebar, color=color.red,   style=shape.triangledown, size=size.small)

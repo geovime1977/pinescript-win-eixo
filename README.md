@@ -15,7 +15,7 @@ Este é o **primeiro projeto que roda com dados WIN reais em tempo real**, aprov
 ```
 pinescript-win-eixo/
 ├── src/
-│   ├── indicator.pine       # Sinais 4/4 no gráfico + alertas
+│   ├── indicator.pine       # Sinais X/4 no gráfico + alertas (X ajustável)
 │   └── strategy.pine        # Backtest com scale-out por Fibo
 └── docs/
     ├── COMO-INSTALAR-BTG.md # Passo a passo
@@ -41,7 +41,7 @@ Ver nota no vault: `~/vault/meus-projetos/01 - Profissional/Projetos/Estratégia
 - **Timeframe operacional:** 1 minuto (gatilho, 2º toque)
 - **Timeframes de contexto:** 5min (TRIX, ADX) + 15/30/60m (congruência)
 - **Fibonacci:** projetado do 1º candle 5min do dia
-- **Gatilho:** 4/4 condições simultâneas
+- **Gatilho:** score >= `min_score` (default 2/4; ajustável 1-4 no input do indicador)
 - **Sizing:** 5/10/15/20 contratos por congruência (0/1/2/3)
 
 ## Limitações
