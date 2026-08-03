@@ -146,6 +146,41 @@ trix1m_ma  = ta.sma(trix1m_val, 4)
 trix1m_cross_up = ta.crossover(trix1m_val, trix1m_ma)
 trix1m_cross_dn = ta.crossunder(trix1m_val, trix1m_ma)
 
+// ============================== EVENTOS MTF 5min =============================
+get_5m_events() =>
+    k5 = ta.stoch(close, high, low, 5)
+    d5 = ta.sma(k5, 3)
+    stoch_up = ta.crossover(k5, d5)
+    stoch_dn = ta.crossunder(k5, d5)
+    stoch_st_buy  = k5 > d5
+    stoch_st_sell = k5 < d5
+    tv = trix_calc(close, 9)
+    tm = ta.sma(tv, 4)
+    trix_up = ta.crossover(tv, tm)
+    trix_dn = ta.crossunder(tv, tm)
+    trix_st_buy  = tv > tm
+    trix_st_sell = tv < tm
+    [dp, dn, av] = ta.dmi(8, 8)
+    adx_cross30 = ta.crossover(av, 30)
+    adx_band_ev = av > 70 and av < 80 and av < av[1] and not (av[1] > 70 and av[1] < 80 and av[1] < av[2])
+    adx_active_st = ta.barssince(ta.crossover(av, 30)) < 3 or (av > 70 and av < 80 and av < av[1])
+    dmi_buy_st  = dp > dn
+    dmi_sell_st = dn > dp
+    [stoch_up, stoch_dn, trix_up, trix_dn, adx_cross30, adx_band_ev, stoch_st_buy, stoch_st_sell, trix_st_buy, trix_st_sell, adx_active_st, dmi_buy_st, dmi_sell_st]
+
+[e5_stoch_up, e5_stoch_dn, e5_trix_up, e5_trix_dn, e5_adx_c30, e5_adx_band, s5_stoch_b, s5_stoch_s, s5_trix_b, s5_trix_s, s5_adx_a, s5_dmi_b, s5_dmi_s] = request.security(syminfo.tickerid, "5", get_5m_events(), lookahead=barmerge.lookahead_off)
+
+sig5_estoc_buy  = e5_stoch_up
+sig5_estoc_sell = e5_stoch_dn
+sig5_trix_buy   = e5_trix_up
+sig5_trix_sell  = e5_trix_dn
+sig5_adx_ev     = e5_adx_c30 or e5_adx_band
+
+combined_5m_buy_st  = s5_stoch_b and s5_trix_b and s5_adx_a and s5_dmi_b
+combined_5m_sell_st = s5_stoch_s and s5_trix_s and s5_adx_a and s5_dmi_s
+sig5_combined_buy   = combined_5m_buy_st  and not combined_5m_buy_st[1]
+sig5_combined_sell  = combined_5m_sell_st and not combined_5m_sell_st[1]
+
 // ============================== CONGRUÊNCIA MTF (regra completa por TF) =====
 // Cada TF é "ativo direcional" quando:
 //   (ADX cruzou 30↑ nos últimos 3 candles OU está descendo dentro de 70-80)
