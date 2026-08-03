@@ -44,16 +44,26 @@ has_base = not na(first5_high) and not na(fib_range) and fib_range > 0
 
 lvl(dir, pct) => dir == "upper" ? first5_high + (pct/100.0) * fib_range : first5_low - (pct/100.0) * fib_range
 
-u0=lvl("upper",0)     l0=lvl("lower",0)
-u50=lvl("upper",50)   l50=lvl("lower",50)
-u100=lvl("upper",100) l100=lvl("lower",100)
-u150=lvl("upper",150) l150=lvl("lower",150)
-u200=lvl("upper",200) l200=lvl("lower",200)
-u250=lvl("upper",250) l250=lvl("lower",250)
-u300=lvl("upper",300) l300=lvl("lower",300)
-u350=lvl("upper",350) l350=lvl("lower",350)
-u400=lvl("upper",400) l400=lvl("lower",400)
-u450=lvl("upper",450) l450=lvl("lower",450)
+u0   = lvl("upper", 0)
+u50  = lvl("upper", 50)
+u100 = lvl("upper", 100)
+u150 = lvl("upper", 150)
+u200 = lvl("upper", 200)
+u250 = lvl("upper", 250)
+u300 = lvl("upper", 300)
+u350 = lvl("upper", 350)
+u400 = lvl("upper", 400)
+u450 = lvl("upper", 450)
+l0   = lvl("lower", 0)
+l50  = lvl("lower", 50)
+l100 = lvl("lower", 100)
+l150 = lvl("lower", 150)
+l200 = lvl("lower", 200)
+l250 = lvl("lower", 250)
+l300 = lvl("lower", 300)
+l350 = lvl("lower", 350)
+l400 = lvl("lower", 400)
+l450 = lvl("lower", 450)
 
 // ============================== 2º TOQUE ====================================
 is_new_day = ta.change(dayofmonth) != 0
@@ -73,41 +83,153 @@ update(is_touching, events, bs_last) =>
         nbs := bs_last + 1
     [ne, nbs]
 
-var int u0e=0, u50e=0, u100e=0, u150e=0, u200e=0, u250e=0, u300e=0, u350e=0, u400e=0, u450e=0
-var int l0e=0, l50e=0, l100e=0, l150e=0, l200e=0, l250e=0, l300e=0, l350e=0, l400e=0, l450e=0
-var int u0b=na, u50b=na, u100b=na, u150b=na, u200b=na, u250b=na, u300b=na, u350b=na, u400b=na, u450b=na
-var int l0b=na, l50b=na, l100b=na, l150b=na, l200b=na, l250b=na, l300b=na, l350b=na, l400b=na, l450b=na
+var int u0e = 0
+var int u50e = 0
+var int u100e = 0
+var int u150e = 0
+var int u200e = 0
+var int u250e = 0
+var int u300e = 0
+var int u350e = 0
+var int u400e = 0
+var int u450e = 0
+var int l0e = 0
+var int l50e = 0
+var int l100e = 0
+var int l150e = 0
+var int l200e = 0
+var int l250e = 0
+var int l300e = 0
+var int l350e = 0
+var int l400e = 0
+var int l450e = 0
+var int u0b = na
+var int u50b = na
+var int u100b = na
+var int u150b = na
+var int u200b = na
+var int u250b = na
+var int u300b = na
+var int u350b = na
+var int u400b = na
+var int u450b = na
+var int l0b = na
+var int l50b = na
+var int l100b = na
+var int l150b = na
+var int l200b = na
+var int l250b = na
+var int l300b = na
+var int l350b = na
+var int l400b = na
+var int l450b = na
 
 if is_new_day
-    u0e:=0, u50e:=0, u100e:=0, u150e:=0, u200e:=0, u250e:=0, u300e:=0, u350e:=0, u400e:=0, u450e:=0
-    l0e:=0, l50e:=0, l100e:=0, l150e:=0, l200e:=0, l250e:=0, l300e:=0, l350e:=0, l400e:=0, l450e:=0
-    u0b:=na, u50b:=na, u100b:=na, u150b:=na, u200b:=na, u250b:=na, u300b:=na, u350b:=na, u400b:=na, u450b:=na
-    l0b:=na, l50b:=na, l100b:=na, l150b:=na, l200b:=na, l250b:=na, l300b:=na, l350b:=na, l400b:=na, l450b:=na
+    u0e := 0
+    u50e := 0
+    u100e := 0
+    u150e := 0
+    u200e := 0
+    u250e := 0
+    u300e := 0
+    u350e := 0
+    u400e := 0
+    u450e := 0
+    l0e := 0
+    l50e := 0
+    l100e := 0
+    l150e := 0
+    l200e := 0
+    l250e := 0
+    l300e := 0
+    l350e := 0
+    l400e := 0
+    l450e := 0
+    u0b := na
+    u50b := na
+    u100b := na
+    u150b := na
+    u200b := na
+    u250b := na
+    u300b := na
+    u350b := na
+    u400b := na
+    u450b := na
+    l0b := na
+    l50b := na
+    l100b := na
+    l150b := na
+    l200b := na
+    l250b := na
+    l300b := na
+    l350b := na
+    l400b := na
+    l450b := na
 
 if has_base
-    [nu0e, nu0b]     = update(tocou(u0), u0e, u0b),     u0e:=nu0e,     u0b:=nu0b
-    [nu50e, nu50b]   = update(tocou(u50), u50e, u50b),  u50e:=nu50e,   u50b:=nu50b
-    [nu100e, nu100b] = update(tocou(u100), u100e, u100b), u100e:=nu100e, u100b:=nu100b
-    [nu150e, nu150b] = update(tocou(u150), u150e, u150b), u150e:=nu150e, u150b:=nu150b
-    [nu200e, nu200b] = update(tocou(u200), u200e, u200b), u200e:=nu200e, u200b:=nu200b
-    [nu250e, nu250b] = update(tocou(u250), u250e, u250b), u250e:=nu250e, u250b:=nu250b
-    [nu300e, nu300b] = update(tocou(u300), u300e, u300b), u300e:=nu300e, u300b:=nu300b
-    [nu350e, nu350b] = update(tocou(u350), u350e, u350b), u350e:=nu350e, u350b:=nu350b
-    [nu400e, nu400b] = update(tocou(u400), u400e, u400b), u400e:=nu400e, u400b:=nu400b
-    [nu450e, nu450b] = update(tocou(u450), u450e, u450b), u450e:=nu450e, u450b:=nu450b
-    [nl0e, nl0b]     = update(tocou(l0), l0e, l0b),     l0e:=nl0e,     l0b:=nl0b
-    [nl50e, nl50b]   = update(tocou(l50), l50e, l50b),  l50e:=nl50e,   l50b:=nl50b
-    [nl100e, nl100b] = update(tocou(l100), l100e, l100b), l100e:=nl100e, l100b:=nl100b
-    [nl150e, nl150b] = update(tocou(l150), l150e, l150b), l150e:=nl150e, l150b:=nl150b
-    [nl200e, nl200b] = update(tocou(l200), l200e, l200b), l200e:=nl200e, l200b:=nl200b
-    [nl250e, nl250b] = update(tocou(l250), l250e, l250b), l250e:=nl250e, l250b:=nl250b
-    [nl300e, nl300b] = update(tocou(l300), l300e, l300b), l300e:=nl300e, l300b:=nl300b
-    [nl350e, nl350b] = update(tocou(l350), l350e, l350b), l350e:=nl350e, l350b:=nl350b
-    [nl400e, nl400b] = update(tocou(l400), l400e, l400b), l400e:=nl400e, l400b:=nl400b
-    [nl450e, nl450b] = update(tocou(l450), l450e, l450b), l450e:=nl450e, l450b:=nl450b
+    [nu0e, nu0b] = update(tocou(u0), u0e, u0b)
+    u0e := nu0e
+    u0b := nu0b
+    [nu50e, nu50b] = update(tocou(u50), u50e, u50b)
+    u50e := nu50e
+    u50b := nu50b
+    [nu100e, nu100b] = update(tocou(u100), u100e, u100b)
+    u100e := nu100e
+    u100b := nu100b
+    [nu150e, nu150b] = update(tocou(u150), u150e, u150b)
+    u150e := nu150e
+    u150b := nu150b
+    [nu200e, nu200b] = update(tocou(u200), u200e, u200b)
+    u200e := nu200e
+    u200b := nu200b
+    [nu250e, nu250b] = update(tocou(u250), u250e, u250b)
+    u250e := nu250e
+    u250b := nu250b
+    [nu300e, nu300b] = update(tocou(u300), u300e, u300b)
+    u300e := nu300e
+    u300b := nu300b
+    [nu350e, nu350b] = update(tocou(u350), u350e, u350b)
+    u350e := nu350e
+    u350b := nu350b
+    [nu400e, nu400b] = update(tocou(u400), u400e, u400b)
+    u400e := nu400e
+    u400b := nu400b
+    [nu450e, nu450b] = update(tocou(u450), u450e, u450b)
+    u450e := nu450e
+    u450b := nu450b
+    [nl0e, nl0b] = update(tocou(l0), l0e, l0b)
+    l0e := nl0e
+    l0b := nl0b
+    [nl50e, nl50b] = update(tocou(l50), l50e, l50b)
+    l50e := nl50e
+    l50b := nl50b
+    [nl100e, nl100b] = update(tocou(l100), l100e, l100b)
+    l100e := nl100e
+    l100b := nl100b
+    [nl150e, nl150b] = update(tocou(l150), l150e, l150b)
+    l150e := nl150e
+    l150b := nl150b
+    [nl200e, nl200b] = update(tocou(l200), l200e, l200b)
+    l200e := nl200e
+    l200b := nl200b
+    [nl250e, nl250b] = update(tocou(l250), l250e, l250b)
+    l250e := nl250e
+    l250b := nl250b
+    [nl300e, nl300b] = update(tocou(l300), l300e, l300b)
+    l300e := nl300e
+    l300b := nl300b
+    [nl350e, nl350b] = update(tocou(l350), l350e, l350b)
+    l350e := nl350e
+    l350b := nl350b
+    [nl400e, nl400b] = update(tocou(l400), l400e, l400b)
+    l400e := nl400e
+    l400b := nl400b
+    [nl450e, nl450b] = update(tocou(l450), l450e, l450b)
+    l450e := nl450e
+    l450b := nl450b
 
-second_upper = (tocou(u0) and u0e>=2) or (tocou(u50) and u50e>=2) or (tocou(u100) and u100e>=2) or (tocou(u150) and u150e>=2) or (tocou(u200) and u200e>=2) or (tocou(u250) and u250e>=2) or (tocou(u300) and u300e>=2) or (tocou(u350) and u350e>=2) or (tocou(u400) and u400e>=2) or (tocou(u450) and u450e>=2)
-second_lower = (tocou(l0) and l0e>=2) or (tocou(l50) and l50e>=2) or (tocou(l100) and l100e>=2) or (tocou(l150) and l150e>=2) or (tocou(l200) and l200e>=2) or (tocou(l250) and l250e>=2) or (tocou(l300) and l300e>=2) or (tocou(l350) and l350e>=2) or (tocou(l400) and l400e>=2) or (tocou(l450) and l450e>=2)
+second_upper = (tocou(u0) and u0e >= 2) or (tocou(u50) and u50e >= 2) or (tocou(u100) and u100e >= 2) or (tocou(u150) and u150e >= 2) or (tocou(u200) and u200e >= 2) or (tocou(u250) and u250e >= 2) or (tocou(u300) and u300e >= 2) or (tocou(u350) and u350e >= 2) or (tocou(u400) and u400e >= 2) or (tocou(u450) and u450e >= 2)
+second_lower = (tocou(l0) and l0e >= 2) or (tocou(l50) and l50e >= 2) or (tocou(l100) and l100e >= 2) or (tocou(l150) and l150e >= 2) or (tocou(l200) and l200e >= 2) or (tocou(l250) and l250e >= 2) or (tocou(l300) and l300e >= 2) or (tocou(l350) and l350e >= 2) or (tocou(l400) and l400e >= 2) or (tocou(l450) and l450e >= 2)
 
 // ============================== INDICADORES =================================
 // Estoc 1m — confirmação de entrada
