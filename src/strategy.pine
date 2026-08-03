@@ -28,7 +28,7 @@ min_extras       = input.int(1, "Mín. confirmações (Estoc 1m / TRIX 5m)", min
 max_gap_touches  = input.int(10, "Máx. candles entre 1º e 2º toque", minval=2, maxval=50)
 wait_after_touch = input.int(1, "Janela pra confirmação após 2º toque (candles)", minval=1, maxval=30)
 adx_bonus        = input.int(5, "Bônus de contratos com ADX 5m ativo", minval=0, maxval=10)
-sizing_cap = input.int(25, "Cap máximo de contratos", minval=5, maxval=100)
+sizing_cap = input.int(20, "Cap máximo de contratos (4 TFs × 5)", minval=5, maxval=100)
 
 session_end_h = input.int(17, "Hora limite pra abrir posição",  minval=10, maxval=17)
 session_end_m = input.int(30, "Minuto limite pra abrir",         minval=0,  maxval=59)
@@ -388,17 +388,18 @@ in_entry_window = (hour < session_end_h) or (hour == session_end_h and minute < 
 in_eod_window   = (hour > force_close_h) or (hour == force_close_h and minute >= force_close_m)
 
 // ============================== SIZING ======================================
-sizing_base(cong) => cong == 3 ? 20 : cong == 2 ? 15 : cong == 1 ? 10 : 5
-sizing_contratos(cong) => math.min(sizing_cap, sizing_base(cong) + (adx_intensifier ? adx_bonus : 0))
+// 5 contratos por TF alinhado na direção (cong44_*_score já é N_TFs 0-4).
+// Mínimo 5 (entra mesmo sem congruência), máximo = sizing_cap (default 20).
+sizing_by_tfs(n) => math.max(5, math.min(sizing_cap, 5 * n))
 
 // ============================== ENTRADAS ====================================
 // 10 targets iguais para todos os cong: 0, 50, 100, 150, 200, 250, 300, 350, 400, 450
 // qty por target = floor(total/10), min 1; T10 fecha o remainder.
 
 if buy_signal_hit and in_entry_window and strategy.position_size == 0 and has_base
-    qty_total = sizing_contratos(cong_buy_score)
+    qty_total = sizing_by_tfs(cong44_buy_score)
     tag = buy_signal_44 ? "★4/4 " : ""
-    strategy.entry("Long", strategy.long, qty=qty_total, comment=tag + "Buy cong=" + str.tostring(cong_buy_score) + " cong44=" + str.tostring(cong44_buy_score))
+    strategy.entry("Long", strategy.long, qty=qty_total, comment=tag + "Buy TFs=" + str.tostring(cong44_buy_score) + " qty=" + str.tostring(qty_total))
     stop_price = close - fib_range * 0.5
     qty_t = math.max(1, int(math.floor(qty_total / 10.0)))
     strategy.exit("T1",  from_entry="Long", qty=qty_t, limit=lvl("upper",   0), stop=stop_price)
@@ -413,9 +414,9 @@ if buy_signal_hit and in_entry_window and strategy.position_size == 0 and has_ba
     strategy.exit("T10", from_entry="Long",            limit=lvl("upper", 450), stop=stop_price)
 
 if sell_signal_hit and in_entry_window and strategy.position_size == 0 and has_base
-    qty_total = sizing_contratos(cong_sell_score)
+    qty_total = sizing_by_tfs(cong44_sell_score)
     tag = sell_signal_44 ? "★4/4 " : ""
-    strategy.entry("Short", strategy.short, qty=qty_total, comment=tag + "Sell cong=" + str.tostring(cong_sell_score) + " cong44=" + str.tostring(cong44_sell_score))
+    strategy.entry("Short", strategy.short, qty=qty_total, comment=tag + "Sell TFs=" + str.tostring(cong44_sell_score) + " qty=" + str.tostring(qty_total))
     stop_price = close + fib_range * 0.5
     qty_t = math.max(1, int(math.floor(qty_total / 10.0)))
     strategy.exit("T1",  from_entry="Short", qty=qty_t, limit=lvl("lower",   0), stop=stop_price)
