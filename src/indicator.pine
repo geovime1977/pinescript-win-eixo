@@ -19,7 +19,7 @@ tol_pct   = input.float(0.05, "Tolerância de toque (%)",           group=grpFib
 grpSig    = "Sinais"
 cross_win = input.int(3, "Janela de iniciação (candles)",          group=grpSig, minval=1, maxval=10, tooltip="Quantos candles atrás o cruzamento/iniciação de um indicador ainda conta como fresh. 1 = estrito (só cruzou neste candle); 3 = default; 10 = permissivo.")
 gap_bars  = input.int(3, "Gap mínimo entre eventos de toque",       group=grpSig, minval=1, maxval=20)
-reset_gap = input.int(10, "Reset do contador após N candles sem tocar", group=grpSig, minval=3, maxval=100, tooltip="Se o preço fica N candles longe do nível (não toca), o contador de toques reseta para 0. Assim, um novo par 1º+2º toque no mesmo nível vira novo aviso amarelo.")
+reset_gap = input.int(5, "Reset do contador após N candles sem tocar", group=grpSig, minval=3, maxval=100, tooltip="Se o preço fica N candles longe do nível (não toca), o contador de toques reseta para 0. Assim, um novo par 1º+2º toque no mesmo nível vira novo aviso amarelo.")
 adx_min   = input.float(25.0, "ADX mínimo pra congruência TF sup.", group=grpSig, step=1)
 sig_cooldown     = input.int(5, "Cooldown entre sinais (candles)",     group=grpSig, minval=1, maxval=60)
 max_gap_touches  = input.int(10, "Máx. candles entre 1º e 2º toque",   group=grpSig, minval=2, maxval=50, tooltip="Se o 2º toque no mesmo Fibo demorar mais que N candles, o setup expira. O próximo toque vira novo 1º toque.")
