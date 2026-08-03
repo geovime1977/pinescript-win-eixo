@@ -445,9 +445,12 @@ if sell_signal_hit
     sell_first_touch_ago  := 999999
     sell_second_touch_ago := 999999
 
-// Aviso amarelo: 2ª batida acabou de acontecer, ainda sem confirmação
-fibo_touch_buy_alert  = buy_cond1  and not buy_signal_hit
-fibo_touch_sell_alert = sell_cond1 and not sell_signal_hit
+// Aviso amarelo: APENAS no candle exato da 2ª batida (transição 1→2)
+// Evita persistir em candles seguintes onde o preço ainda está encostado no nível
+second_lower_new = buy_cond1  and not buy_cond1[1]
+second_upper_new = sell_cond1 and not sell_cond1[1]
+fibo_touch_buy_alert  = second_lower_new and not buy_signal_hit
+fibo_touch_sell_alert = second_upper_new and not sell_signal_hit
 
 // ============================== COOLDOWN DE SINAIS ==========================
 // Só marca o PRIMEIRO gatilho de cada cluster (evita setas empilhadas em barras
@@ -528,14 +531,14 @@ plotshape(show_alert and fibo_touch_buy_alert,  title="AVISO 2º toque SUP", loc
 plotshape(show_alert and fibo_touch_sell_alert, title="AVISO 2º toque RES", location=location.abovebar, color=color.yellow, style=shape.diamond, size=size.tiny, text="!")
 
 // Seta cheia de GATILHO — desenhada NO CANDLE ANTERIOR (offset=-1) quando este candle confirma
-plotshape(buy_confirmed_now,  title="GATILHO COMPRA", location=location.belowbar, color=color.green, style=shape.triangleup,   size=size.small, text="BUY",  offset=-1)
-plotshape(sell_confirmed_now, title="GATILHO VENDA",  location=location.abovebar, color=color.red,   style=shape.triangledown, size=size.small, text="SELL", offset=-1)
+plotshape(buy_confirmed_now,  title="GATILHO COMPRA", location=location.belowbar, color=color.green, style=shape.triangleup,   size=size.small, text="BUY")
+plotshape(sell_confirmed_now, title="GATILHO VENDA",  location=location.abovebar, color=color.red,   style=shape.triangledown, size=size.small, text="SELL")
 
 // Sinal PREMIUM 4/4 — estrela dourada quando congruência total (5+15+30+60) alinha
 buy_confirmed_44  = buy_confirmed_now  and cong44_buy_score  == 4
 sell_confirmed_44 = sell_confirmed_now and cong44_sell_score == 4
-plotshape(buy_confirmed_44,  title="4/4 COMPRA PREMIUM", location=location.belowbar, color=color.yellow, style=shape.arrowup, size=size.normal, text="★ 4/4 BUY",  offset=-1)
-plotshape(sell_confirmed_44, title="4/4 VENDA PREMIUM",  location=location.abovebar, color=color.yellow, style=shape.arrowdown, size=size.normal, text="★ 4/4 SELL", offset=-1)
+plotshape(buy_confirmed_44,  title="4/4 COMPRA PREMIUM", location=location.belowbar, color=color.yellow, style=shape.arrowup, size=size.normal, text="★ 4/4 BUY")
+plotshape(sell_confirmed_44, title="4/4 VENDA PREMIUM",  location=location.abovebar, color=color.yellow, style=shape.arrowdown, size=size.normal, text="★ 4/4 SELL")
 
 alertcondition(fibo_touch_buy_alert or fibo_touch_sell_alert,
      title="Eixo WIN — Aviso 2º toque",
