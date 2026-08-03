@@ -22,6 +22,7 @@ strategy("Eixo WIN — Strategy X/4", overlay=true,
 tol_pct    = input.float(0.05, "Tolerância de toque (%)",    minval=0.01, step=0.01)
 cross_win  = input.int(3, "Janela de iniciação (candles)",  minval=1, maxval=10)
 gap_bars   = input.int(3, "Gap mínimo entre eventos",       minval=1, maxval=20)
+reset_gap  = input.int(10, "Reset contador após N candles sem tocar", minval=3, maxval=100)
 adx_min    = input.float(25.0, "ADX mín. congruência TF sup", step=1)
 min_extras       = input.int(1, "Mín. confirmações (Estoc 1m / TRIX 5m)", minval=1, maxval=2)
 max_gap_touches  = input.int(10, "Máx. candles entre 1º e 2º toque", minval=2, maxval=50)
@@ -84,6 +85,10 @@ update(is_touching, events, bs_last) =>
         nbs := 0
     else if not na(bs_last)
         nbs := bs_last + 1
+        // Reset por gap: novo par 1º+2º toque vira novo aviso
+        if nbs > reset_gap
+            ne := 0
+            nbs := na
     [ne, nbs]
 
 var int u0e = 0
