@@ -246,9 +246,11 @@ stoch_bars_dn  = ta.barssince(stoch_cross_dn)
 trix_bars_up_5m = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossover(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))))
 trix_bars_dn_5m = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossunder(ta.trix(close, 9), ta.sma(ta.trix(close, 9), 4))))
 
-// ADX 5m — INTENSIFICADOR (só sizing, não gatilha entrada)
+// ADX 5m — INTENSIFICADOR (sizing) + entra na congruência 4/4
 adx5 = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[2])
-adx_up_30_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossover(ta.dmi(8, 8)[2], 30)) < cross_win)
+dmp5 = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[0])
+dmn5 = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[1])
+adx_up_30_recent = request.security(syminfo.tickerid, "5", ta.barssince(ta.crossover(ta.dmi(8, 8)[2], 30)) < 3)
 adx_band_dn = request.security(syminfo.tickerid, "5", ta.dmi(8, 8)[2] > 70 and ta.dmi(8, 8)[2] < 80 and ta.dmi(8, 8)[2] < ta.dmi(8, 8)[2][1])
 adx_intensifier = adx_up_30_recent or adx_band_dn
 
@@ -259,12 +261,32 @@ trix1m_cross_up = ta.crossover(trix1m_val, trix1m_ma)
 trix1m_cross_dn = ta.crossunder(trix1m_val, trix1m_ma)
 
 // ============================== CONGRUÊNCIA MTF =============================
-[dip15, dim15, adx15] = request.security(syminfo.tickerid, "15", ta.dmi(8, 8))
-[dip30, dim30, adx30] = request.security(syminfo.tickerid, "30", ta.dmi(8, 8))
-[dip60, dim60, adx60] = request.security(syminfo.tickerid, "60", ta.dmi(8, 8))
+get_htf() =>
+    [dp, dn, av] = ta.dmi(8, 8)
+    up30r = ta.barssince(ta.crossover(av, 30)) < 3
+    band  = av > 70 and av < 80 and av < av[1]
+    active = up30r or band
+    [dp, dn, av, active]
 
-cong_buy_score  = (adx15>adx_min and dip15>dim15 ? 1 : 0) + (adx30>adx_min and dip30>dim30 ? 1 : 0) + (adx60>adx_min and dip60>dim60 ? 1 : 0)
-cong_sell_score = (adx15>adx_min and dim15>dip15 ? 1 : 0) + (adx30>adx_min and dim30>dip30 ? 1 : 0) + (adx60>adx_min and dim60>dip60 ? 1 : 0)
+[dip15, dim15, adx15, act15] = request.security(syminfo.tickerid, "15", get_htf())
+[dip30, dim30, adx30, act30] = request.security(syminfo.tickerid, "30", get_htf())
+[dip60, dim60, adx60, act60] = request.security(syminfo.tickerid, "60", get_htf())
+
+cong5_buy   = adx_intensifier and dmp5  > dmn5
+cong15_buy  = act15 and dip15 > dim15
+cong30_buy  = act30 and dip30 > dim30
+cong60_buy  = act60 and dip60 > dim60
+cong5_sell  = adx_intensifier and dmn5  > dmp5
+cong15_sell = act15 and dim15 > dip15
+cong30_sell = act30 and dim30 > dip30
+cong60_sell = act60 and dim60 > dip60
+
+cong44_buy_score  = (cong5_buy  ? 1 : 0) + (cong15_buy  ? 1 : 0) + (cong30_buy  ? 1 : 0) + (cong60_buy  ? 1 : 0)
+cong44_sell_score = (cong5_sell ? 1 : 0) + (cong15_sell ? 1 : 0) + (cong30_sell ? 1 : 0) + (cong60_sell ? 1 : 0)
+
+// Score MTF antigo (só 15+30+60) — mantido para o sizing
+cong_buy_score  = (cong15_buy  ? 1 : 0) + (cong30_buy  ? 1 : 0) + (cong60_buy  ? 1 : 0)
+cong_sell_score = (cong15_sell ? 1 : 0) + (cong30_sell ? 1 : 0) + (cong60_sell ? 1 : 0)
 
 // ============================== GATILHO (opção B — global por direção) =====
 // Estado 1: sem setup → aguarda 1º toque em algum suporte
@@ -322,6 +344,10 @@ sell_score = (second_upper ? 1 : 0) + sell_extras_score
 buy_signal_hit  = buy_touch_window_open  and buy_extras_score  >= min_extras
 sell_signal_hit = sell_touch_window_open and sell_extras_score >= min_extras
 
+// SINAL PREMIUM 4/4 (paridade com indicator): gatilho X/2 + congruência total 4 TFs
+buy_signal_44  = buy_signal_hit  and cong44_buy_score  == 4
+sell_signal_44 = sell_signal_hit and cong44_sell_score == 4
+
 if buy_signal_hit
     buy_first_touch_ago  := 999999
     buy_second_touch_ago := 999999
@@ -343,7 +369,8 @@ sizing_contratos(cong) => math.min(sizing_cap, sizing_base(cong) + (adx_intensif
 
 if buy_signal_hit and in_entry_window and strategy.position_size == 0 and has_base
     qty_total = sizing_contratos(cong_buy_score)
-    strategy.entry("Long", strategy.long, qty=qty_total, comment=str.tostring(buy_score) + "/4 Buy cong=" + str.tostring(cong_buy_score))
+    tag = buy_signal_44 ? "★4/4 " : ""
+    strategy.entry("Long", strategy.long, qty=qty_total, comment=tag + "Buy cong=" + str.tostring(cong_buy_score) + " cong44=" + str.tostring(cong44_buy_score))
     stop_price = close - fib_range * 0.5
     qty_t = math.max(1, int(math.floor(qty_total / 10.0)))
     strategy.exit("T1",  from_entry="Long", qty=qty_t, limit=lvl("upper",   0), stop=stop_price)
@@ -359,7 +386,8 @@ if buy_signal_hit and in_entry_window and strategy.position_size == 0 and has_ba
 
 if sell_signal_hit and in_entry_window and strategy.position_size == 0 and has_base
     qty_total = sizing_contratos(cong_sell_score)
-    strategy.entry("Short", strategy.short, qty=qty_total, comment=str.tostring(sell_score) + "/4 Sell cong=" + str.tostring(cong_sell_score))
+    tag = sell_signal_44 ? "★4/4 " : ""
+    strategy.entry("Short", strategy.short, qty=qty_total, comment=tag + "Sell cong=" + str.tostring(cong_sell_score) + " cong44=" + str.tostring(cong44_sell_score))
     stop_price = close + fib_range * 0.5
     qty_t = math.max(1, int(math.floor(qty_total / 10.0)))
     strategy.exit("T1",  from_entry="Short", qty=qty_t, limit=lvl("lower",   0), stop=stop_price)

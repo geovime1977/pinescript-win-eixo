@@ -114,20 +114,18 @@ stoch_dn_recent = ta.barssince(stoch_cross_dn) < cross_win
 
 // ============================== INDICADORES 5min via request ================
 get_5m_signals() =>
-    // TRIX 5m — retorna barssince do cross (não boolean "recent")
     trix_val = trix_calc(close, 9)
     trix_ma = ta.sma(trix_val, 4)
     tbu = ta.barssince(ta.crossover(trix_val, trix_ma))
     tbd = ta.barssince(ta.crossunder(trix_val, trix_ma))
-    // ADX 5m (INTENSIFICADOR de sizing, não confirmador de entrada)
     [dmp, dmn, adx_v] = ta.dmi(8, 8)
     adx_up_30_r = ta.barssince(ta.crossover(adx_v, 30)) < 3
     adx_between_70_80_dn = adx_v > 70 and adx_v < 80 and adx_v < adx_v[1]
-    [tbu, tbd, adx_v, adx_up_30_r, adx_between_70_80_dn]
+    [tbu, tbd, adx_v, dmp, dmn, adx_up_30_r, adx_between_70_80_dn]
 
-[trix_bars_up_5m, trix_bars_dn_5m, adx5, adx_up_30_5m, adx_band_dn_5m] = request.security(syminfo.tickerid, "5", get_5m_signals(), lookahead=barmerge.lookahead_off)
+[trix_bars_up_5m, trix_bars_dn_5m, adx5, dmp5, dmn5, adx_up_30_5m, adx_band_dn_5m] = request.security(syminfo.tickerid, "5", get_5m_signals(), lookahead=barmerge.lookahead_off)
 
-// ADX intensificador: se ativo, aumenta contratos (+adx_bonus, capado em sizing_cap)
+// ADX intensificador (5m): também usado para sizing e para congruência 4/4
 adx_intensifier = adx_up_30_5m or adx_band_dn_5m
 
 // ============================== TRIX 1min (saída) ===========================
@@ -139,22 +137,36 @@ trix1m_ma  = ta.sma(trix1m_val, 4)
 trix1m_cross_up = ta.crossover(trix1m_val, trix1m_ma)
 trix1m_cross_dn = ta.crossunder(trix1m_val, trix1m_ma)
 
-// ============================== CONGRUÊNCIA MTF =============================
+// ============================== CONGRUÊNCIA MTF (regra completa por TF) =====
+// Cada TF é "ativo direcional" quando:
+//   (ADX cruzou 30↑ nos últimos 3 candles OU está descendo dentro de 70-80)
+//   E DMI aponta a direção (+DI > -DI para compra, oposto para venda)
 get_higher_tf() =>
     [dmp, dmn, adx_v] = ta.dmi(8, 8)
-    [dmp, dmn, adx_v]
+    adx_up_30_r = ta.barssince(ta.crossover(adx_v, 30)) < 3
+    adx_band_dn = adx_v > 70 and adx_v < 80 and adx_v < adx_v[1]
+    adx_active = adx_up_30_r or adx_band_dn
+    [dmp, dmn, adx_v, adx_active]
 
-[dmp15, dmn15, adx15] = request.security(syminfo.tickerid, "15", get_higher_tf(), lookahead=barmerge.lookahead_off)
-[dmp30, dmn30, adx30] = request.security(syminfo.tickerid, "30", get_higher_tf(), lookahead=barmerge.lookahead_off)
-[dmp60, dmn60, adx60] = request.security(syminfo.tickerid, "60", get_higher_tf(), lookahead=barmerge.lookahead_off)
+[dmp15, dmn15, adx15, adx_active_15] = request.security(syminfo.tickerid, "15", get_higher_tf(), lookahead=barmerge.lookahead_off)
+[dmp30, dmn30, adx30, adx_active_30] = request.security(syminfo.tickerid, "30", get_higher_tf(), lookahead=barmerge.lookahead_off)
+[dmp60, dmn60, adx60, adx_active_60] = request.security(syminfo.tickerid, "60", get_higher_tf(), lookahead=barmerge.lookahead_off)
 
-cong15_buy  = adx15 > adx_min and dmp15 > dmn15
-cong30_buy  = adx30 > adx_min and dmp30 > dmn30
-cong60_buy  = adx60 > adx_min and dmp60 > dmn60
-cong15_sell = adx15 > adx_min and dmn15 > dmp15
-cong30_sell = adx30 > adx_min and dmn30 > dmp30
-cong60_sell = adx60 > adx_min and dmn60 > dmp60
+// Alinhamento direcional por TF (agora usa a regra completa ADX>30 fresh OU banda 70-80 caindo)
+cong5_buy   = adx_intensifier and dmp5  > dmn5
+cong15_buy  = adx_active_15   and dmp15 > dmn15
+cong30_buy  = adx_active_30   and dmp30 > dmn30
+cong60_buy  = adx_active_60   and dmp60 > dmn60
+cong5_sell  = adx_intensifier and dmn5  > dmp5
+cong15_sell = adx_active_15   and dmn15 > dmp15
+cong30_sell = adx_active_30   and dmn30 > dmp30
+cong60_sell = adx_active_60   and dmn60 > dmp60
 
+// Score 4/4 = quantos dos 4 TFs (5, 15, 30, 60) estão alinhados na direção
+cong44_buy_score  = (cong5_buy  ? 1 : 0) + (cong15_buy  ? 1 : 0) + (cong30_buy  ? 1 : 0) + (cong60_buy  ? 1 : 0)
+cong44_sell_score = (cong5_sell ? 1 : 0) + (cong15_sell ? 1 : 0) + (cong30_sell ? 1 : 0) + (cong60_sell ? 1 : 0)
+
+// Score 3/3 antigo (só MTF superiores) — mantido para o sizing
 cong_buy_score  = (cong15_buy  ? 1 : 0) + (cong30_buy  ? 1 : 0) + (cong60_buy  ? 1 : 0)
 cong_sell_score = (cong15_sell ? 1 : 0) + (cong30_sell ? 1 : 0) + (cong60_sell ? 1 : 0)
 
@@ -397,6 +409,10 @@ sell_score = (sell_cond1 ? 1 : 0) + sell_extras_score
 buy_signal_hit  = buy_touch_window_open  and buy_extras_score  >= min_extras
 sell_signal_hit = sell_touch_window_open and sell_extras_score >= min_extras
 
+// SINAL PREMIUM 4/4: gatilho normal + congruência total nos 4 TFs (5,15,30,60)
+buy_signal_44  = buy_signal_hit  and cong44_buy_score  == 4
+sell_signal_44 = sell_signal_hit and cong44_sell_score == 4
+
 // Reset após disparar (evita re-entrada no mesmo setup)
 if buy_signal_hit
     buy_first_touch_ago  := 999999
@@ -462,9 +478,9 @@ if show_panel and barstate.islast
     table.cell(pnl, 0, 5, "Confirmações (min " + str.tostring(min_extras) + "/2)", text_size=size.tiny)
     table.cell(pnl, 1, 5, str.tostring(buy_extras_score) + "/2",  text_size=size.tiny, text_color=(buy_signal_hit ? color.green : color.gray))
     table.cell(pnl, 2, 5, str.tostring(sell_extras_score) + "/2", text_size=size.tiny, text_color=(sell_signal_hit ? color.red : color.gray))
-    table.cell(pnl, 0, 6, "Cong (15/30/60)",   text_size=size.tiny)
-    table.cell(pnl, 1, 6, light(cong15_buy)  + light(cong30_buy)  + light(cong60_buy)  + " = " + str.tostring(cong_buy_score),  text_size=size.tiny)
-    table.cell(pnl, 2, 6, light(cong15_sell) + light(cong30_sell) + light(cong60_sell) + " = " + str.tostring(cong_sell_score), text_size=size.tiny)
+    table.cell(pnl, 0, 6, "Cong 4/4 (5/15/30/60)", text_size=size.tiny)
+    table.cell(pnl, 1, 6, light(cong5_buy)  + light(cong15_buy)  + light(cong30_buy)  + light(cong60_buy)  + " = " + str.tostring(cong44_buy_score),  text_size=size.tiny, text_color=(cong44_buy_score  == 4 ? color.yellow : color.gray))
+    table.cell(pnl, 2, 6, light(cong5_sell) + light(cong15_sell) + light(cong30_sell) + light(cong60_sell) + " = " + str.tostring(cong44_sell_score), text_size=size.tiny, text_color=(cong44_sell_score == 4 ? color.yellow : color.gray))
     table.cell(pnl, 0, 7, "Contratos",         text_size=size.tiny)
     table.cell(pnl, 1, 7, str.tostring(sizing_contratos(cong_buy_score)),  text_size=size.tiny, text_color=color.green)
     table.cell(pnl, 2, 7, str.tostring(sizing_contratos(cong_sell_score)), text_size=size.tiny, text_color=color.red)
@@ -490,6 +506,12 @@ plotshape(show_alert and fibo_touch_sell_alert, title="AVISO 2º toque RES", loc
 plotshape(buy_confirmed_now,  title="GATILHO COMPRA", location=location.belowbar, color=color.green, style=shape.triangleup,   size=size.small, text="BUY",  offset=-1)
 plotshape(sell_confirmed_now, title="GATILHO VENDA",  location=location.abovebar, color=color.red,   style=shape.triangledown, size=size.small, text="SELL", offset=-1)
 
+// Sinal PREMIUM 4/4 — estrela dourada quando congruência total (5+15+30+60) alinha
+buy_confirmed_44  = buy_confirmed_now  and cong44_buy_score  == 4
+sell_confirmed_44 = sell_confirmed_now and cong44_sell_score == 4
+plotshape(buy_confirmed_44,  title="4/4 COMPRA PREMIUM", location=location.belowbar, color=color.yellow, style=shape.star, size=size.normal, text="★ 4/4 BUY",  offset=-1)
+plotshape(sell_confirmed_44, title="4/4 VENDA PREMIUM",  location=location.abovebar, color=color.yellow, style=shape.star, size=size.normal, text="★ 4/4 SELL", offset=-1)
+
 alertcondition(fibo_touch_buy_alert or fibo_touch_sell_alert,
      title="Eixo WIN — Aviso 2º toque",
      message="{{ticker}} @ {{close}} | 2º toque no Fibo — aguardando confirmação")
@@ -497,6 +519,10 @@ alertcondition(fibo_touch_buy_alert or fibo_touch_sell_alert,
 alertcondition(buy_confirmed_now or sell_confirmed_now,
      title="Eixo WIN — Gatilho confirmado",
      message="{{ticker}} @ {{close}} | Gatilho confirmado (toque anterior + iniciação agora)")
+
+alertcondition(buy_confirmed_44 or sell_confirmed_44,
+     title="Eixo WIN — Convergência 4/4 PREMIUM",
+     message="{{ticker}} @ {{close}} | 4/4 CONVERGÊNCIA TOTAL — todos os TFs (5+15+30+60) alinhados")
 
 plot(buy_score,       title="buy_score",       display=display.none)
 plot(sell_score,      title="sell_score",      display=display.none)
