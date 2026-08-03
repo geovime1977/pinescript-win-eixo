@@ -630,7 +630,7 @@ if scale_out_sell_now
 // ============================== PAINEL VISUAL ===============================
 pos_table = panel_pos == "top_right" ? position.top_right : panel_pos == "top_left" ? position.top_left : panel_pos == "bottom_right" ? position.bottom_right : position.bottom_left
 
-var table pnl = table.new(pos_table, 3, 14, border_width=1)
+var table pnl = table.new(pos_table, 3, 11, border_width=1)
 
 light(is_on) => is_on ? "🟢" : "⚪"
 color_bg_hit(hit) => hit ? color.new(color.green, 60) : color.new(color.gray, 90)
@@ -651,53 +651,45 @@ fmt_tf(sb, tb, ab, db, score) => light(sb) + light(tb) + light(ab) + light(db) +
 color_tf(score) => score == 4 ? color.new(color.yellow, 0) : score == 3 ? color.new(color.orange, 0) : color.new(color.gray, 30)
 
 if show_panel and barstate.islast
-    table.clear(pnl, 0, 0, 2, 13)
-    table.cell(pnl, 0, 0, "EIXO WIN (mín " + str.tostring(min_extras) + "/2 conf)", bgcolor=color.new(color.black, 30), text_color=color.white, text_size=size.small)
-    table.cell(pnl, 1, 0, "🟢 COMPRA",          bgcolor=color_bg_hit(buy_signal_hit),  text_color=color.white, text_size=size.small)
-    table.cell(pnl, 2, 0, "🔴 VENDA",           bgcolor=color_bg_hit(sell_signal_hit), text_color=color.white, text_size=size.small)
-    table.cell(pnl, 0, 1, "★ 2ª batida em Fibo",  text_size=size.tiny, tooltip="Algum nível Fibo foi tocado pela 2ª+ vez neste candle. Âncora obrigatória.")
-    table.cell(pnl, 1, 1, light(buy_cond1),        text_size=size.tiny)
-    table.cell(pnl, 2, 1, light(sell_cond1),       text_size=size.tiny)
-    table.cell(pnl, 0, 2, "Estoc 1m (cross fresh)", text_size=size.tiny)
-    table.cell(pnl, 1, 2, light(buy_cond2),        text_size=size.tiny)
-    table.cell(pnl, 2, 2, light(sell_cond2),       text_size=size.tiny)
-    table.cell(pnl, 0, 3, "TRIX 5m (cross fresh)", text_size=size.tiny)
-    table.cell(pnl, 1, 3, light(buy_cond3),        text_size=size.tiny)
-    table.cell(pnl, 2, 3, light(sell_cond3),       text_size=size.tiny)
-    table.cell(pnl, 0, 4, "ADX 5m (intensificador)", text_size=size.tiny, tooltip="Cruzou 30↑ OU descendo entre 70-80. Neutro — pinta os DOIS lados quando ativo.")
-    table.cell(pnl, 1, 4, light(adx_intensifier),  text_size=size.tiny)
-    table.cell(pnl, 2, 4, light(adx_intensifier),  text_size=size.tiny)
-    // Setup por TF — luzes Est/TRIX/ADX/DMI + X/4 (mostra buildup antes da seta MTF disparar)
-    table.cell(pnl, 0, 5, "5m (Est/TRIX/ADX/DMI)",  text_size=size.tiny, tooltip="Combinado 5m — quando 4/4 dispara seta AQUA no gráfico")
-    table.cell(pnl, 1, 5, fmt_tf(s5_stoch_b, s5_trix_b, s5_adx_a, s5_dmi_b, score_5m_buy),   text_size=size.tiny, text_color=color_tf(score_5m_buy))
-    table.cell(pnl, 2, 5, fmt_tf(s5_stoch_s, s5_trix_s, s5_adx_a, s5_dmi_s, score_5m_sell),  text_size=size.tiny, text_color=color_tf(score_5m_sell))
-    table.cell(pnl, 0, 6, "15m (Est/TRIX/ADX/DMI)", text_size=size.tiny, tooltip="Combinado 15m — quando 4/4 dispara seta LIME no gráfico")
-    table.cell(pnl, 1, 6, fmt_tf(s15_stoch_b, s15_trix_b, s15_adx_a, s15_dmi_b, score_15m_buy),  text_size=size.tiny, text_color=color_tf(score_15m_buy))
-    table.cell(pnl, 2, 6, fmt_tf(s15_stoch_s, s15_trix_s, s15_adx_a, s15_dmi_s, score_15m_sell), text_size=size.tiny, text_color=color_tf(score_15m_sell))
-    table.cell(pnl, 0, 7, "30m (Est/TRIX/ADX/DMI)", text_size=size.tiny, tooltip="Combinado 30m — quando 4/4 dispara seta LARANJA no gráfico")
-    table.cell(pnl, 1, 7, fmt_tf(s30_stoch_b, s30_trix_b, s30_adx_a, s30_dmi_b, score_30m_buy),  text_size=size.tiny, text_color=color_tf(score_30m_buy))
-    table.cell(pnl, 2, 7, fmt_tf(s30_stoch_s, s30_trix_s, s30_adx_a, s30_dmi_s, score_30m_sell), text_size=size.tiny, text_color=color_tf(score_30m_sell))
-    table.cell(pnl, 0, 8, "60m (Est/TRIX/ADX/DMI)", text_size=size.tiny, tooltip="Combinado 60m — quando 4/4 dispara seta ROXA no gráfico")
-    table.cell(pnl, 1, 8, fmt_tf(s60_stoch_b, s60_trix_b, s60_adx_a, s60_dmi_b, score_60m_buy),  text_size=size.tiny, text_color=color_tf(score_60m_buy))
-    table.cell(pnl, 2, 8, fmt_tf(s60_stoch_s, s60_trix_s, s60_adx_a, s60_dmi_s, score_60m_sell), text_size=size.tiny, text_color=color_tf(score_60m_sell))
-    // Cong 4/4 histórico (mantido)
-    table.cell(pnl, 0, 9, "Cong 4/4 (5/15/30/60)", text_size=size.tiny)
-    table.cell(pnl, 1, 9, light(cong5_buy)  + light(cong15_buy)  + light(cong30_buy)  + light(cong60_buy)  + " = " + str.tostring(cong44_buy_score),  text_size=size.tiny, text_color=(cong44_buy_score  == 4 ? color.yellow : color.gray))
-    table.cell(pnl, 2, 9, light(cong5_sell) + light(cong15_sell) + light(cong30_sell) + light(cong60_sell) + " = " + str.tostring(cong44_sell_score), text_size=size.tiny, text_color=(cong44_sell_score == 4 ? color.yellow : color.gray))
-    // Contratos sugeridos (baseado em TFs alinhados AGORA — 5×N)
-    table.cell(pnl, 0, 10, "Contratos p/ entrar (5×TFs)", text_size=size.tiny, tooltip="Se entrar AGORA no 1m: 5 contratos por TF alinhado no lado da entrada. Mínimo 5, máximo " + str.tostring(sizing_cap) + ".")
-    table.cell(pnl, 1, 10, str.tostring(sizing_by_tfs(n_tfs_buy_now)),  text_size=size.tiny, text_color=color.green)
-    table.cell(pnl, 2, 10, str.tostring(sizing_by_tfs(n_tfs_sell_now)), text_size=size.tiny, text_color=color.red)
-    // Posição implícita aberta + flips pendentes
-    table.cell(pnl, 0, 11, "Posição aberta (implícita)", text_size=size.tiny, tooltip="Contratos assumidos a partir do último gatilho. Cada TF que virar contra → sai 5 no próximo toque em Fibo.")
-    table.cell(pnl, 1, 11, lado_open == "BUY"  ? str.tostring(contratos_open) + " ctr" : "—", text_size=size.tiny, text_color=(lado_open == "BUY"  ? color.green : color.gray))
-    table.cell(pnl, 2, 11, lado_open == "SELL" ? str.tostring(contratos_open) + " ctr" : "—", text_size=size.tiny, text_color=(lado_open == "SELL" ? color.red   : color.gray))
-    table.cell(pnl, 0, 12, "TFs travados na entrada", text_size=size.tiny)
-    table.cell(pnl, 1, 12, light(tf5_locked_buy)  + light(tf15_locked_buy)  + light(tf30_locked_buy)  + light(tf60_locked_buy),  text_size=size.tiny, text_color=color.green)
-    table.cell(pnl, 2, 12, light(tf5_locked_sell) + light(tf15_locked_sell) + light(tf30_locked_sell) + light(tf60_locked_sell), text_size=size.tiny, text_color=color.red)
-    table.cell(pnl, 0, 13, "Flips pendentes (sair 5×N)", text_size=size.tiny, tooltip="TFs travados que já viraram contra. No próximo toque em Fibo → sai 5 por flip.")
-    table.cell(pnl, 1, 13, str.tostring(n_flips_buy)  + " → -" + str.tostring(5 * n_flips_buy)  + " ctr", text_size=size.tiny, text_color=(n_flips_buy  > 0 ? color.orange : color.gray))
-    table.cell(pnl, 2, 13, str.tostring(n_flips_sell) + " → -" + str.tostring(5 * n_flips_sell) + " ctr", text_size=size.tiny, text_color=(n_flips_sell > 0 ? color.orange : color.gray))
+    table.clear(pnl, 0, 0, 2, 10)
+    table.cell(pnl, 0, 0, "EIXO WIN — Painel MTF",   bgcolor=color.new(color.black, 30), text_color=color.white, text_size=size.small)
+    table.cell(pnl, 1, 0, "🟢 COMPRA",                bgcolor=color_bg_hit(buy_signal_hit),  text_color=color.white, text_size=size.small)
+    table.cell(pnl, 2, 0, "🔴 VENDA",                 bgcolor=color_bg_hit(sell_signal_hit), text_color=color.white, text_size=size.small)
+    table.cell(pnl, 0, 1, "★ 2ª batida em Fibo",     text_size=size.tiny, tooltip="Algum nível Fibo foi tocado pela 2ª+ vez neste candle. Âncora obrigatória.")
+    table.cell(pnl, 1, 1, light(buy_cond1),           text_size=size.tiny)
+    table.cell(pnl, 2, 1, light(sell_cond1),          text_size=size.tiny)
+    // Setup por TF (Est/TRIX/ADX/DMI do próprio TF) — luzes + X/4
+    // Substituem completamente as linhas antigas de Estoc 1m / TRIX 5m / ADX 5m
+    table.cell(pnl, 0, 2, "5m (Est/TRIX/ADX/DMI)",   text_size=size.tiny, tooltip="Combinado 5m. Cor da seta no gráfico = intensidade do score (1→transparente, 4→opaca). Cor base: aqua.")
+    table.cell(pnl, 1, 2, fmt_tf(s5_stoch_b, s5_trix_b, s5_adx_a, s5_dmi_b, score_5m_buy),   text_size=size.tiny, text_color=color_tf(score_5m_buy))
+    table.cell(pnl, 2, 2, fmt_tf(s5_stoch_s, s5_trix_s, s5_adx_a, s5_dmi_s, score_5m_sell),  text_size=size.tiny, text_color=color_tf(score_5m_sell))
+    table.cell(pnl, 0, 3, "15m (Est/TRIX/ADX/DMI)",  text_size=size.tiny, tooltip="Combinado 15m. Cor base: lime.")
+    table.cell(pnl, 1, 3, fmt_tf(s15_stoch_b, s15_trix_b, s15_adx_a, s15_dmi_b, score_15m_buy),  text_size=size.tiny, text_color=color_tf(score_15m_buy))
+    table.cell(pnl, 2, 3, fmt_tf(s15_stoch_s, s15_trix_s, s15_adx_a, s15_dmi_s, score_15m_sell), text_size=size.tiny, text_color=color_tf(score_15m_sell))
+    table.cell(pnl, 0, 4, "30m (Est/TRIX/ADX/DMI)",  text_size=size.tiny, tooltip="Combinado 30m. Cor base: laranja.")
+    table.cell(pnl, 1, 4, fmt_tf(s30_stoch_b, s30_trix_b, s30_adx_a, s30_dmi_b, score_30m_buy),  text_size=size.tiny, text_color=color_tf(score_30m_buy))
+    table.cell(pnl, 2, 4, fmt_tf(s30_stoch_s, s30_trix_s, s30_adx_a, s30_dmi_s, score_30m_sell), text_size=size.tiny, text_color=color_tf(score_30m_sell))
+    table.cell(pnl, 0, 5, "60m (Est/TRIX/ADX/DMI)",  text_size=size.tiny, tooltip="Combinado 60m. Cor base: roxo.")
+    table.cell(pnl, 1, 5, fmt_tf(s60_stoch_b, s60_trix_b, s60_adx_a, s60_dmi_b, score_60m_buy),  text_size=size.tiny, text_color=color_tf(score_60m_buy))
+    table.cell(pnl, 2, 5, fmt_tf(s60_stoch_s, s60_trix_s, s60_adx_a, s60_dmi_s, score_60m_sell), text_size=size.tiny, text_color=color_tf(score_60m_sell))
+    // Congruência agregada mantida como resumo rápido
+    table.cell(pnl, 0, 6, "Cong 4/4 (5/15/30/60)",   text_size=size.tiny)
+    table.cell(pnl, 1, 6, light(cong5_buy)  + light(cong15_buy)  + light(cong30_buy)  + light(cong60_buy)  + " = " + str.tostring(cong44_buy_score),  text_size=size.tiny, text_color=(cong44_buy_score  == 4 ? color.yellow : color.gray))
+    table.cell(pnl, 2, 6, light(cong5_sell) + light(cong15_sell) + light(cong30_sell) + light(cong60_sell) + " = " + str.tostring(cong44_sell_score), text_size=size.tiny, text_color=(cong44_sell_score == 4 ? color.yellow : color.gray))
+    // Sizing: 5 × N_TFs alinhados AGORA
+    table.cell(pnl, 0, 7, "Contratos p/ entrar (5×TFs)", text_size=size.tiny, tooltip="Se entrar AGORA no 1m: 5 contratos por TF alinhado. Mín 5, máx " + str.tostring(sizing_cap) + ".")
+    table.cell(pnl, 1, 7, str.tostring(sizing_by_tfs(n_tfs_buy_now)),  text_size=size.tiny, text_color=color.green)
+    table.cell(pnl, 2, 7, str.tostring(sizing_by_tfs(n_tfs_sell_now)), text_size=size.tiny, text_color=color.red)
+    // Posição implícita a partir do último gatilho
+    table.cell(pnl, 0, 8, "Posição aberta (implícita)", text_size=size.tiny, tooltip="Contratos assumidos a partir do último gatilho. Cada TF que virar contra → sai 5 no próximo toque em Fibo.")
+    table.cell(pnl, 1, 8, lado_open == "BUY"  ? str.tostring(contratos_open) + " ctr" : "—", text_size=size.tiny, text_color=(lado_open == "BUY"  ? color.green : color.gray))
+    table.cell(pnl, 2, 8, lado_open == "SELL" ? str.tostring(contratos_open) + " ctr" : "—", text_size=size.tiny, text_color=(lado_open == "SELL" ? color.red   : color.gray))
+    table.cell(pnl, 0, 9, "TFs travados na entrada", text_size=size.tiny)
+    table.cell(pnl, 1, 9, light(tf5_locked_buy)  + light(tf15_locked_buy)  + light(tf30_locked_buy)  + light(tf60_locked_buy),  text_size=size.tiny, text_color=color.green)
+    table.cell(pnl, 2, 9, light(tf5_locked_sell) + light(tf15_locked_sell) + light(tf30_locked_sell) + light(tf60_locked_sell), text_size=size.tiny, text_color=color.red)
+    table.cell(pnl, 0, 10, "Flips pendentes (sair 5×N)", text_size=size.tiny, tooltip="TFs travados que já viraram contra. No próximo toque em Fibo → sai 5 por flip.")
+    table.cell(pnl, 1, 10, str.tostring(n_flips_buy)  + " → -" + str.tostring(5 * n_flips_buy)  + " ctr", text_size=size.tiny, text_color=(n_flips_buy  > 0 ? color.orange : color.gray))
+    table.cell(pnl, 2, 10, str.tostring(n_flips_sell) + " → -" + str.tostring(5 * n_flips_sell) + " ctr", text_size=size.tiny, text_color=(n_flips_sell > 0 ? color.orange : color.gray))
 
 // ============================== SETAS + ALERTAS ==============================
 // Fluxo temporal:
@@ -752,14 +744,53 @@ plot(sell_score,      title="sell_score",      display=display.none)
 plot(cong_buy_score,  title="cong_buy_score",  display=display.none)
 plot(cong_sell_score, title="cong_sell_score", display=display.none)
 
-// ============================== SETAS MTF (4 TFs) ============================
-// Sinal COMBINADO por TF: dispara na transição para "os 4 indicadores alinhados".
-// Cores por TF: 5m=aqua · 15m=verde · 30m=laranja · 60m=roxo
-plotshape(show_5m_cmb  and sig_5m_buy,   title="5m BUY",   location=location.belowbar, color=color.new(color.aqua,    0), style=shape.arrowup,   size=size.small, text="5m")
-plotshape(show_5m_cmb  and sig_5m_sell,  title="5m SELL",  location=location.abovebar, color=color.new(color.aqua,    0), style=shape.arrowdown, size=size.small, text="5m")
-plotshape(show_15m_cmb and sig_15m_buy,  title="15m BUY",  location=location.belowbar, color=color.new(color.lime,    0), style=shape.arrowup,   size=size.small, text="15m")
-plotshape(show_15m_cmb and sig_15m_sell, title="15m SELL", location=location.abovebar, color=color.new(color.lime,    0), style=shape.arrowdown, size=size.small, text="15m")
-plotshape(show_30m_cmb and sig_30m_buy,  title="30m BUY",  location=location.belowbar, color=color.new(color.orange,  0), style=shape.arrowup,   size=size.small, text="30m")
-plotshape(show_30m_cmb and sig_30m_sell, title="30m SELL", location=location.abovebar, color=color.new(color.orange,  0), style=shape.arrowdown, size=size.small, text="30m")
-plotshape(show_60m_cmb and sig_60m_buy,  title="60m BUY",  location=location.belowbar, color=color.new(color.purple,  0), style=shape.arrowup,   size=size.small, text="60m")
-plotshape(show_60m_cmb and sig_60m_sell, title="60m SELL", location=location.abovebar, color=color.new(color.purple,  0), style=shape.arrowdown, size=size.small, text="60m")
+// ============================== SETAS MTF (4 TFs) — TONALIDADE DINÂMICA ======
+// Esquema de nomenclatura: <tf_idx>.<score>
+//   TF 5m  → 1.1, 1.2, 1.3, 1.4 (cor base aqua, tonalidade sobe com score)
+//   TF 15m → 2.1, 2.2, 2.3, 2.4 (cor base lime)
+//   TF 30m → 3.1, 3.2, 3.3, 3.4 (cor base laranja)
+//   TF 60m → 4.1, 4.2, 4.3, 4.4 (cor base roxo)
+// Cada TF tem 4 tonalidades — score 1 = mais transparente, score 4 = opaca.
+// Seta é desenhada quando o score do TF SOBE naquele candle (redução não desenha,
+// mas o painel mostra em tempo real). Direção da seta = lado dominante do TF.
+
+tone_from_score(sc) => sc == 4 ? 0 : sc == 3 ? 25 : sc == 2 ? 50 : sc == 1 ? 75 : 100
+
+// Detecta subida de score por TF/direção (ignora quando cai)
+up_5m_buy    = score_5m_buy   > score_5m_buy[1]   and score_5m_buy   >= 1
+up_5m_sell   = score_5m_sell  > score_5m_sell[1]  and score_5m_sell  >= 1
+up_15m_buy   = score_15m_buy  > score_15m_buy[1]  and score_15m_buy  >= 1
+up_15m_sell  = score_15m_sell > score_15m_sell[1] and score_15m_sell >= 1
+up_30m_buy   = score_30m_buy  > score_30m_buy[1]  and score_30m_buy  >= 1
+up_30m_sell  = score_30m_sell > score_30m_sell[1] and score_30m_sell >= 1
+up_60m_buy   = score_60m_buy  > score_60m_buy[1]  and score_60m_buy  >= 1
+up_60m_sell  = score_60m_sell > score_60m_sell[1] and score_60m_sell >= 1
+
+// Cores dinâmicas com tonalidade proporcional ao score do TF
+c_5m_buy    = color.new(color.aqua,   tone_from_score(score_5m_buy))
+c_5m_sell   = color.new(color.aqua,   tone_from_score(score_5m_sell))
+c_15m_buy   = color.new(color.lime,   tone_from_score(score_15m_buy))
+c_15m_sell  = color.new(color.lime,   tone_from_score(score_15m_sell))
+c_30m_buy   = color.new(color.orange, tone_from_score(score_30m_buy))
+c_30m_sell  = color.new(color.orange, tone_from_score(score_30m_sell))
+c_60m_buy   = color.new(color.purple, tone_from_score(score_60m_buy))
+c_60m_sell  = color.new(color.purple, tone_from_score(score_60m_sell))
+
+// Labels de tonalidade (1.1 a 4.4) — mostra no texto da seta pra identificar peso
+lbl_5m_buy   = "1." + str.tostring(score_5m_buy)
+lbl_5m_sell  = "1." + str.tostring(score_5m_sell)
+lbl_15m_buy  = "2." + str.tostring(score_15m_buy)
+lbl_15m_sell = "2." + str.tostring(score_15m_sell)
+lbl_30m_buy  = "3." + str.tostring(score_30m_buy)
+lbl_30m_sell = "3." + str.tostring(score_30m_sell)
+lbl_60m_buy  = "4." + str.tostring(score_60m_buy)
+lbl_60m_sell = "4." + str.tostring(score_60m_sell)
+
+plotshape(show_5m_cmb  and up_5m_buy,    title="5m BUY",   location=location.belowbar, color=c_5m_buy,    style=shape.arrowup,   size=size.small, text=lbl_5m_buy,   textcolor=color.new(color.aqua, 0))
+plotshape(show_5m_cmb  and up_5m_sell,   title="5m SELL",  location=location.abovebar, color=c_5m_sell,   style=shape.arrowdown, size=size.small, text=lbl_5m_sell,  textcolor=color.new(color.aqua, 0))
+plotshape(show_15m_cmb and up_15m_buy,   title="15m BUY",  location=location.belowbar, color=c_15m_buy,   style=shape.arrowup,   size=size.small, text=lbl_15m_buy,  textcolor=color.new(color.lime, 0))
+plotshape(show_15m_cmb and up_15m_sell,  title="15m SELL", location=location.abovebar, color=c_15m_sell,  style=shape.arrowdown, size=size.small, text=lbl_15m_sell, textcolor=color.new(color.lime, 0))
+plotshape(show_30m_cmb and up_30m_buy,   title="30m BUY",  location=location.belowbar, color=c_30m_buy,   style=shape.arrowup,   size=size.small, text=lbl_30m_buy,  textcolor=color.new(color.orange, 0))
+plotshape(show_30m_cmb and up_30m_sell,  title="30m SELL", location=location.abovebar, color=c_30m_sell,  style=shape.arrowdown, size=size.small, text=lbl_30m_sell, textcolor=color.new(color.orange, 0))
+plotshape(show_60m_cmb and up_60m_buy,   title="60m BUY",  location=location.belowbar, color=c_60m_buy,   style=shape.arrowup,   size=size.small, text=lbl_60m_buy,  textcolor=color.new(color.purple, 0))
+plotshape(show_60m_cmb and up_60m_sell,  title="60m SELL", location=location.abovebar, color=c_60m_sell,  style=shape.arrowdown, size=size.small, text=lbl_60m_sell, textcolor=color.new(color.purple, 0))
