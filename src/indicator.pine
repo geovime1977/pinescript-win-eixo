@@ -29,6 +29,10 @@ show_alert   = input.bool(true, "Mostrar seta amarela de AVISO no 2º toque", gr
 adx_bonus    = input.int(5, "Bônus de contratos quando ADX 5m intensifica", group=grpSig, minval=0, maxval=10, tooltip="ADX 5m cruzou 30 pra cima OU está descendo entre 70-80 → +N contratos no sizing base (capado em 25).")
 sizing_cap   = input.int(25, "Cap máximo de contratos",                  group=grpSig, minval=5, maxval=100)
 
+grp5m = "Setas MTF — 5min"
+show_5m_ind = input.bool(true, "5m — sinais individuais (Estoc/TRIX/ADX/DMI)", group=grp5m)
+show_5m_cmb = input.bool(true, "5m — sinal combinado (4 alinhados)",           group=grp5m)
+
 grpPnl     = "Painel"
 show_panel = input.bool(true, "Mostrar painel de sinais",           group=grpPnl)
 panel_pos  = input.string("top_right", "Posição do painel", options=["top_right","top_left","bottom_right","bottom_left"], group=grpPnl)
@@ -556,3 +560,20 @@ plot(buy_score,       title="buy_score",       display=display.none)
 plot(sell_score,      title="sell_score",      display=display.none)
 plot(cong_buy_score,  title="cong_buy_score",  display=display.none)
 plot(cong_sell_score, title="cong_sell_score", display=display.none)
+
+// ============================== SETAS MTF 5min ===============================
+// Cor 5m: azul-claro (aqua). Formatos distintos por indicador.
+c5m = color.new(color.aqua, 20)
+
+// Individuais (toggleable)
+plotshape(show_5m_ind and sig5_estoc_buy,  title="5m Estoc BUY",  location=location.belowbar, color=c5m, style=shape.circle,      size=size.tiny, text="e5")
+plotshape(show_5m_ind and sig5_estoc_sell, title="5m Estoc SELL", location=location.abovebar, color=c5m, style=shape.circle,      size=size.tiny, text="e5")
+plotshape(show_5m_ind and sig5_trix_buy,   title="5m TRIX BUY",   location=location.belowbar, color=c5m, style=shape.square,      size=size.tiny, text="t5")
+plotshape(show_5m_ind and sig5_trix_sell,  title="5m TRIX SELL",  location=location.abovebar, color=c5m, style=shape.square,      size=size.tiny, text="t5")
+plotshape(show_5m_ind and sig5_adx_ev,     title="5m ADX evento", location=location.abovebar, color=c5m, style=shape.diamond,     size=size.tiny, text="a5")
+plotshape(show_5m_ind and s5_dmi_b and not s5_dmi_b[1], title="5m DMI BUY",  location=location.belowbar, color=c5m, style=shape.triangleup,   size=size.tiny, text="d5")
+plotshape(show_5m_ind and s5_dmi_s and not s5_dmi_s[1], title="5m DMI SELL", location=location.abovebar, color=c5m, style=shape.triangledown, size=size.tiny, text="d5")
+
+// Combinado 5m (toggleable) — quando os 4 alinham
+plotshape(show_5m_cmb and sig5_combined_buy,  title="5m COMBINADO BUY",  location=location.belowbar, color=color.new(color.aqua, 0), style=shape.arrowup,   size=size.small, text="★5m")
+plotshape(show_5m_cmb and sig5_combined_sell, title="5m COMBINADO SELL", location=location.abovebar, color=color.new(color.aqua, 0), style=shape.arrowdown, size=size.small, text="★5m")
