@@ -29,6 +29,7 @@ max_gap_touches  = input.int(10, "Máx. candles entre 1º e 2º toque", minval=2
 wait_after_touch = input.int(1, "Janela pra confirmação após 2º toque (candles)", minval=1, maxval=30)
 adx_bonus        = input.int(5, "Bônus de contratos com ADX 5m ativo", minval=0, maxval=10)
 sizing_cap = input.int(20, "Cap máximo de contratos (4 TFs × 5)", minval=5, maxval=100)
+anti_faca  = input.bool(true, "Filtro anti-tendência (bloqueia se 15/30/60 em 3/3 contra)", tooltip="Bloqueia BUY se algum TF superior (15m/30m/60m) estiver em 3/3 SELL. Idem SELL. Evita pegar faca caindo.")
 
 session_end_h = input.int(17, "Hora limite pra abrir posição",  minval=10, maxval=17)
 session_end_m = input.int(30, "Minuto limite pra abrir",         minval=0,  maxval=59)
@@ -298,6 +299,32 @@ get_htf() =>
 [dip30, dim30, adx30, act30] = request.security(syminfo.tickerid, "30", get_htf())
 [dip60, dim60, adx60, act60] = request.security(syminfo.tickerid, "60", get_htf())
 
+// Score de direção por TF (Est + TRIX + DMI, sem ADX) — pra alimentar anti-faca
+get_htf_dir() =>
+    k = ta.stoch(close, high, low, 5)
+    d = ta.sma(k, 3)
+    sb = k > d
+    ss = k < d
+    tv = trix_calc(close, 9)
+    tm = ta.sma(tv, 4)
+    tb = tv > tm
+    ts = tv < tm
+    [dp, dn, _av] = ta.dmi(8, 8)
+    db = dp > dn
+    ds = dn > dp
+    [sb, ss, tb, ts, db, ds]
+
+[s15b_sb, s15b_ss, s15b_tb, s15b_ts, s15b_db, s15b_ds] = request.security(syminfo.tickerid, "15", get_htf_dir())
+[s30b_sb, s30b_ss, s30b_tb, s30b_ts, s30b_db, s30b_ds] = request.security(syminfo.tickerid, "30", get_htf_dir())
+[s60b_sb, s60b_ss, s60b_tb, s60b_ts, s60b_db, s60b_ds] = request.security(syminfo.tickerid, "60", get_htf_dir())
+
+score_15m_buy_s  = (s15b_sb ? 1 : 0) + (s15b_tb ? 1 : 0) + (s15b_db ? 1 : 0)
+score_15m_sell_s = (s15b_ss ? 1 : 0) + (s15b_ts ? 1 : 0) + (s15b_ds ? 1 : 0)
+score_30m_buy_s  = (s30b_sb ? 1 : 0) + (s30b_tb ? 1 : 0) + (s30b_db ? 1 : 0)
+score_30m_sell_s = (s30b_ss ? 1 : 0) + (s30b_ts ? 1 : 0) + (s30b_ds ? 1 : 0)
+score_60m_buy_s  = (s60b_sb ? 1 : 0) + (s60b_tb ? 1 : 0) + (s60b_db ? 1 : 0)
+score_60m_sell_s = (s60b_ss ? 1 : 0) + (s60b_ts ? 1 : 0) + (s60b_ds ? 1 : 0)
+
 cong5_buy   = adx_intensifier and dmp5  > dmn5
 cong15_buy  = act15 and dip15 > dim15
 cong30_buy  = act30 and dip30 > dim30
@@ -369,8 +396,13 @@ sell_extras_score = (sell_stoch_valid ? 1 : 0) + (sell_trix_valid ? 1 : 0)
 buy_score  = (second_lower ? 1 : 0) + buy_extras_score
 sell_score = (second_upper ? 1 : 0) + sell_extras_score
 
-buy_signal_hit  = buy_touch_window_open  and buy_extras_score  >= min_extras
-sell_signal_hit = sell_touch_window_open and sell_extras_score >= min_extras
+// Filtro anti-tendência: bloqueia entrada se qualquer TF superior (15/30/60)
+// está em score >= 3 (todos 3 indicadores) na direção OPOSTA.
+anti_faca_buy_ok  = not anti_faca or (score_15m_sell_s < 3 and score_30m_sell_s < 3 and score_60m_sell_s < 3)
+anti_faca_sell_ok = not anti_faca or (score_15m_buy_s  < 3 and score_30m_buy_s  < 3 and score_60m_buy_s  < 3)
+
+buy_signal_hit  = buy_touch_window_open  and buy_extras_score  >= min_extras and anti_faca_buy_ok
+sell_signal_hit = sell_touch_window_open and sell_extras_score >= min_extras and anti_faca_sell_ok
 
 // SINAL PREMIUM 4/4 (paridade com indicator): gatilho X/2 + congruência total 4 TFs
 buy_signal_44  = buy_signal_hit  and cong44_buy_score  == 4
