@@ -16,9 +16,13 @@ Este é o **primeiro projeto que roda com dados WIN reais em tempo real**, aprov
 pinescript-win-eixo/
 ├── src/
 │   ├── indicator.pine       # Sinais X/4 no gráfico + alertas (X ajustável)
-│   └── strategy.pine        # Backtest com scale-out por Fibo
+│   ├── strategy.pine        # Backtest com scale-out por Fibo
+│   ├── macd60.pine          # Monitor MACD H1 (12/26/9) standalone
+│   ├── strategy.ntsl        # Port pra ProfitChart Pro (Nelogica)
+│   └── EixoWIN.mq5          # Port pra MetaTrader 5 (Expert Advisor)
 └── docs/
-    ├── COMO-INSTALAR-BTG.md # Passo a passo
+    ├── COMO-INSTALAR-BTG.md # Passo a passo TradingView-BTG
+    ├── COMO-INSTALAR-MT5.md # Passo a passo MetaTrader 5
     └── ALERTAS-CONFIG.md    # Setup de alertas mobile/email
 ```
 
@@ -28,9 +32,34 @@ pinescript-win-eixo/
 2. Buscar WINQ26 (ou vencimento atual), timeframe 1m
 3. Abrir Pine Editor
 4. Colar `src/indicator.pine` → Adicionar ao gráfico
-5. Configurar alerta seguindo `docs/ALERTAS-CONFIG.md`
+5. (Opcional) Colar `src/macd60.pine` num painel separado → Adicionar (monitor MACD H1)
+6. Configurar alerta seguindo `docs/ALERTAS-CONFIG.md`
 
 Detalhes: `docs/COMO-INSTALAR-BTG.md`.
+
+## Módulo MACD H1 (macd60.pine)
+
+Indicador **standalone** que puxa MACD (12/26/9 default) do timeframe **60 minutos** independente do gráfico atual, via `request.security`. Serve como filtro de contexto pra confirmar direção dos sinais do EixoWIN:
+
+- **MACD H1 cruzou pra cima** → viés comprador — reforça sinais BUY do EixoWIN
+- **MACD H1 cruzou pra baixo** → viés vendedor — reforça sinais SELL do EixoWIN
+- **MACD H1 sem cruzamento recente** → lateralidade em H1, prefira ficar de fora
+
+**Uso recomendado:** aplicar em painel separado (não overlay), abaixo do gráfico principal do WIN. Assim você vê `indicator.pine` no gráfico + `macd60.pine` embaixo, ambos ao mesmo tempo.
+
+**Alertas disponíveis (3 opções):**
+1. `MACD H1 - Cruzamento (unico)` — cabe no plano free (1 alerta cobre compra e venda)
+2. `MACD H1 - CRUZAMENTO COMPRA` — requer plano Plus+ (múltiplos alertas)
+3. `MACD H1 - CRUZAMENTO VENDA` — requer plano Plus+
+
+**Uso no MT5:** equivalente já está integrado no `EixoWIN.mq5` (função `CheckMacdH1Cross`) via `iMACD(_Symbol, PERIOD_H1, 12, 26, 9, PRICE_CLOSE)`, disparando `Alert` popup e `SendNotification` (push mobile). Quem operar via MT5 não precisa aplicar nada adicional — ver `docs/COMO-INSTALAR-MT5.md` §6.
+
+## MT5 mobile — status
+
+- Acesso à conta MT5 pelo **app celular validado em 2026-08-04**
+- MetaQuotes permite **apenas 1 sessão ativa por conta** → mobile e desktop não coexistem sem deslogar um dos lados
+- Recomendação: EA rodando no desktop + celular só recebendo push (`InpMacdAlertPush=true`)
+- Detalhes de convivência mobile/desktop em `docs/COMO-INSTALAR-MT5.md` §0
 
 ## Estratégia canônica
 

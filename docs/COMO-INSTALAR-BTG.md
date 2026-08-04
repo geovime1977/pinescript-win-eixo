@@ -40,6 +40,17 @@ O TradingView embarcado no BTG geralmente expõe o editor Pine completo. Testa a
 - [ ] Painel de sinais no canto superior direito com 4 luzes por lado
 - [ ] Setas verdes/vermelhas quando 4/4 dispara
 
+### 5. (Opcional) Adicionar o MACD H1 Monitor
+- [ ] Abrir `src/macd60.pine` deste repo
+- [ ] Copiar todo o conteúdo (Cmd+A, Cmd+C)
+- [ ] No Pine Editor, criar novo script → colar → **Adicionar ao gráfico**
+- [ ] Ele aparece em **painel separado abaixo** do gráfico (não sobrepõe)
+- [ ] Verificar: linha azul (MACD), laranja (Signal), colunas verde/vermelho (histograma)
+- [ ] Setinhas C (compra) / V (venda) marcam cruzamentos do H1
+- [ ] Configurar alerta: clicar no ícone de sino → escolher condição:
+  - Plano free: **"MACD H1 - Cruzamento (unico)"**
+  - Plano Plus+: **"MACD H1 - CRUZAMENTO COMPRA"** e **"MACD H1 - CRUZAMENTO VENDA"** (2 alertas separados)
+
 ---
 
 ## Rota B — TradingView.com (se BTG restringir editor)

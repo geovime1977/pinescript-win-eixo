@@ -1,0 +1,73 @@
+// @version=5
+// -----------------------------------------------------------------------------
+// Eixo Estrategico — MACD H1 Monitor (Standalone)
+// -----------------------------------------------------------------------------
+// APLICAR JUNTO com indicator.pine ou strategy.pine em qualquer timeframe do WIN.
+// Puxa o MACD do TIMEFRAME 60 MINUTOS via request.security e emite alertas
+// de cruzamento (compra/venda) na configuracao default (12/26/9).
+//
+// Uso: filtro de contexto pra confirmar a direcao dos sinais do EixoWIN.
+//   - Se MACD H1 cruzou pra CIMA -> vies comprador
+//   - Se MACD H1 cruzou pra BAIXO -> vies vendedor
+//
+// Este indicador NAO executa ordem. Ele apenas monitora e alerta.
+// -----------------------------------------------------------------------------
+
+indicator("Eixo WIN — MACD H1 Monitor", overlay=false, precision=2)
+
+// ============================== INPUTS =====================================
+fast_len    = input.int(12, "EMA Rápida (default 12)",  minval=1, group="MACD (default)")
+slow_len    = input.int(26, "EMA Lenta (default 26)",   minval=1, group="MACD (default)")
+signal_len  = input.int(9,  "Signal SMA (default 9)",   minval=1, group="MACD (default)")
+htf         = input.timeframe("60", "Timeframe de contexto", options=["15","30","60","120","240","D"], group="MACD (default)")
+
+show_labels = input.bool(true, "Mostrar setas de cruzamento", group="Visual")
+show_zero   = input.bool(true, "Mostrar linha zero",          group="Visual")
+
+// ============================== CALCULO ====================================
+// Pine v5 exige envolver ta.macd() numa funcao pra passar em request.security
+get_macd() =>
+    [m, s, h] = ta.macd(close, fast_len, slow_len, signal_len)
+    [m, s, h]
+
+[macdLine, signalLine, histLine] = request.security(syminfo.tickerid, htf, get_macd(),
+     lookahead=barmerge.lookahead_off)
+
+// Cruzamentos no timeframe H1 (detectados na resolucao atual do grafico)
+cross_up = ta.crossover(macdLine, signalLine)
+cross_dn = ta.crossunder(macdLine, signalLine)
+
+// ============================== PLOTS ======================================
+plot(macdLine,   "MACD",   color=color.new(color.blue,   0), linewidth=2)
+plot(signalLine, "Signal", color=color.new(color.orange, 0), linewidth=2)
+plot(histLine, "Histograma",
+     color=histLine >= 0 ? color.new(color.green, 40) : color.new(color.red, 40),
+     style=plot.style_columns)
+
+hline(show_zero ? 0 : na, "Zero", color=color.new(color.gray, 40), linestyle=hline.style_dashed)
+
+plotshape(show_labels and cross_up, title="COMPRA",
+     style=shape.triangleup, location=location.bottom,
+     color=color.new(color.green, 0), size=size.small, text="C")
+
+plotshape(show_labels and cross_dn, title="VENDA",
+     style=shape.triangledown, location=location.top,
+     color=color.new(color.red, 0), size=size.small, text="V")
+
+// ============================== ALERTS =====================================
+// 3 alertconditions: use a que couber no seu plano TradingView.
+//
+// Plano FREE (1 alerta ativo): use "MACD H1 - Cruzamento"
+// Plano PLUS+ (100+ alertas):  use "COMPRA" e "VENDA" separados
+
+alertcondition(cross_up or cross_dn,
+     title="MACD H1 - Cruzamento (unico)",
+     message="MACD H1 cruzou ({{ticker}}) @ {{close}} - abra o grafico pra ver direcao")
+
+alertcondition(cross_up,
+     title="MACD H1 - CRUZAMENTO COMPRA",
+     message="MACD H1 CRUZAMENTO COMPRA - {{ticker}} @ {{close}}")
+
+alertcondition(cross_dn,
+     title="MACD H1 - CRUZAMENTO VENDA",
+     message="MACD H1 CRUZAMENTO VENDA - {{ticker}} @ {{close}}")
