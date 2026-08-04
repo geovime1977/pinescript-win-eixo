@@ -26,6 +26,7 @@ max_gap_touches  = input.int(10, "Máx. candles entre 1º e 2º toque",   group=
 wait_after_touch = input.int(1, "Janela pra confirmação após 2º toque (candles)", group=grpSig, minval=1, maxval=30, tooltip="Cross de Estoc 1m ou TRIX 5m vale entre o 2º toque e até N candles depois. Default 1 = apenas o candle do toque + próximo. Cross fora dessa janela é ignorado.")
 min_extras       = input.int(1, "Mín. confirmações (Estoc 1m / TRIX 5m)", group=grpSig, minval=1, maxval=2)
 show_alert   = input.bool(true, "Mostrar seta amarela de AVISO no 2º toque", group=grpSig, tooltip="Aviso visual do 2º toque, ANTES de qualquer confirmação — serve pra você se preparar.")
+anti_faca    = input.bool(true, "Filtro anti-tendência (bloqueia se 15/30/60 em 3+/4 contra)", group=grpSig, tooltip="Bloqueia BUY se 15m OU 30m OU 60m estiver em score_sell ≥ 3. Idem SELL. Evita 'pegar faca caindo' — trades contra tendência dos TFs maiores.")
 adx_bonus    = input.int(5, "Bônus de contratos quando ADX 5m intensifica", group=grpSig, minval=0, maxval=10, tooltip="ADX 5m cruzou 30 pra cima OU está descendo entre 70-80 → +N contratos no sizing base (capado em 25).")
 sizing_cap   = input.int(25, "Cap máximo de contratos",                  group=grpSig, minval=5, maxval=100)
 
@@ -479,8 +480,23 @@ sell_extras_score = (sell_cond2 ? 1 : 0) + (sell_cond3 ? 1 : 0)
 buy_score  = (buy_cond1  ? 1 : 0) + buy_extras_score
 sell_score = (sell_cond1 ? 1 : 0) + sell_extras_score
 
-buy_signal_hit  = buy_touch_window_open  and buy_extras_score  >= min_extras
-sell_signal_hit = sell_touch_window_open and sell_extras_score >= min_extras
+// Scores por TF (definição adiantada pra alimentar o filtro anti-faca)
+// Scores por TF SEM ADX — direção pura (Est + TRIX + DMI), max 3
+// ADX é tratado separadamente como marcador de intensidade
+score_15m_buy  = (s15_stoch_b ? 1 : 0) + (s15_trix_b ? 1 : 0) + (s15_dmi_b ? 1 : 0)
+score_15m_sell = (s15_stoch_s ? 1 : 0) + (s15_trix_s ? 1 : 0) + (s15_dmi_s ? 1 : 0)
+score_30m_buy  = (s30_stoch_b ? 1 : 0) + (s30_trix_b ? 1 : 0) + (s30_dmi_b ? 1 : 0)
+score_30m_sell = (s30_stoch_s ? 1 : 0) + (s30_trix_s ? 1 : 0) + (s30_dmi_s ? 1 : 0)
+score_60m_buy  = (s60_stoch_b ? 1 : 0) + (s60_trix_b ? 1 : 0) + (s60_dmi_b ? 1 : 0)
+score_60m_sell = (s60_stoch_s ? 1 : 0) + (s60_trix_s ? 1 : 0) + (s60_dmi_s ? 1 : 0)
+
+// Filtro anti-tendência: bloqueia entrada se qualquer TF superior (15/30/60)
+// estiver em score >= 3 na direção OPOSTA (todos os 3 indicadores contra).
+anti_faca_buy_ok  = not anti_faca or (score_15m_sell < 3 and score_30m_sell < 3 and score_60m_sell < 3)
+anti_faca_sell_ok = not anti_faca or (score_15m_buy  < 3 and score_30m_buy  < 3 and score_60m_buy  < 3)
+
+buy_signal_hit  = buy_touch_window_open  and buy_extras_score  >= min_extras and anti_faca_buy_ok
+sell_signal_hit = sell_touch_window_open and sell_extras_score >= min_extras and anti_faca_sell_ok
 
 // SINAL PREMIUM 4/4: gatilho normal + congruência total nos 4 TFs (5,15,30,60)
 buy_signal_44  = buy_signal_hit  and cong44_buy_score  == 4
@@ -635,20 +651,14 @@ var table pnl = table.new(pos_table, 3, 11, border_width=1)
 light(is_on) => is_on ? "🟢" : "⚪"
 color_bg_hit(hit) => hit ? color.new(color.green, 60) : color.new(color.gray, 90)
 
-// Contagem X/4 por TF (para o painel: mostra buildup dos indicadores antes de disparar a seta)
-score_5m_buy   = (s5_stoch_b  ? 1 : 0) + (s5_trix_b  ? 1 : 0) + (s5_adx_a  ? 1 : 0) + (s5_dmi_b  ? 1 : 0)
-score_5m_sell  = (s5_stoch_s  ? 1 : 0) + (s5_trix_s  ? 1 : 0) + (s5_adx_a  ? 1 : 0) + (s5_dmi_s  ? 1 : 0)
-score_15m_buy  = (s15_stoch_b ? 1 : 0) + (s15_trix_b ? 1 : 0) + (s15_adx_a ? 1 : 0) + (s15_dmi_b ? 1 : 0)
-score_15m_sell = (s15_stoch_s ? 1 : 0) + (s15_trix_s ? 1 : 0) + (s15_adx_a ? 1 : 0) + (s15_dmi_s ? 1 : 0)
-score_30m_buy  = (s30_stoch_b ? 1 : 0) + (s30_trix_b ? 1 : 0) + (s30_adx_a ? 1 : 0) + (s30_dmi_b ? 1 : 0)
-score_30m_sell = (s30_stoch_s ? 1 : 0) + (s30_trix_s ? 1 : 0) + (s30_adx_a ? 1 : 0) + (s30_dmi_s ? 1 : 0)
-score_60m_buy  = (s60_stoch_b ? 1 : 0) + (s60_trix_b ? 1 : 0) + (s60_adx_a ? 1 : 0) + (s60_dmi_b ? 1 : 0)
-score_60m_sell = (s60_stoch_s ? 1 : 0) + (s60_trix_s ? 1 : 0) + (s60_adx_a ? 1 : 0) + (s60_dmi_s ? 1 : 0)
+// Score 5m também sem ADX (max 3) — mantém coerência com 15/30/60
+score_5m_buy   = (s5_stoch_b  ? 1 : 0) + (s5_trix_b  ? 1 : 0) + (s5_dmi_b  ? 1 : 0)
+score_5m_sell  = (s5_stoch_s  ? 1 : 0) + (s5_trix_s  ? 1 : 0) + (s5_dmi_s  ? 1 : 0)
 
-// Formata "🟢🟢⚪⚪ 2/4" — 4 luzes na ordem Estoc/TRIX/ADX/DMI + contador
-fmt_tf(sb, tb, ab, db, score) => light(sb) + light(tb) + light(ab) + light(db) + " " + str.tostring(score) + "/4"
+// Formata "🟢🟢⚪ 2/3" — 3 luzes na ordem Estoc/TRIX/DMI + contador
+fmt_tf(sb, tb, db, score) => light(sb) + light(tb) + light(db) + " " + str.tostring(score) + "/3"
 
-color_tf(score) => score == 4 ? color.new(color.yellow, 0) : score == 3 ? color.new(color.orange, 0) : color.new(color.gray, 30)
+color_tf(score) => score == 3 ? color.new(color.yellow, 0) : score == 2 ? color.new(color.orange, 0) : color.new(color.gray, 30)
 
 if show_panel and barstate.islast
     table.clear(pnl, 0, 0, 2, 10)
@@ -658,20 +668,20 @@ if show_panel and barstate.islast
     table.cell(pnl, 0, 1, "★ 2ª batida em Fibo",     text_size=size.tiny, tooltip="Algum nível Fibo foi tocado pela 2ª+ vez neste candle. Âncora obrigatória.")
     table.cell(pnl, 1, 1, light(buy_cond1),           text_size=size.tiny)
     table.cell(pnl, 2, 1, light(sell_cond1),          text_size=size.tiny)
-    // Setup por TF (Est/TRIX/ADX/DMI do próprio TF) — luzes + X/4
-    // Substituem completamente as linhas antigas de Estoc 1m / TRIX 5m / ADX 5m
-    table.cell(pnl, 0, 2, "5m (Est/TRIX/ADX/DMI)",   text_size=size.tiny, tooltip="Combinado 5m. Cor da seta no gráfico = intensidade do score (1→transparente, 4→opaca). Cor base: aqua.")
-    table.cell(pnl, 1, 2, fmt_tf(s5_stoch_b, s5_trix_b, s5_adx_a, s5_dmi_b, score_5m_buy),   text_size=size.tiny, text_color=color_tf(score_5m_buy))
-    table.cell(pnl, 2, 2, fmt_tf(s5_stoch_s, s5_trix_s, s5_adx_a, s5_dmi_s, score_5m_sell),  text_size=size.tiny, text_color=color_tf(score_5m_sell))
-    table.cell(pnl, 0, 3, "15m (Est/TRIX/ADX/DMI)",  text_size=size.tiny, tooltip="Combinado 15m. Cor base: lime.")
-    table.cell(pnl, 1, 3, fmt_tf(s15_stoch_b, s15_trix_b, s15_adx_a, s15_dmi_b, score_15m_buy),  text_size=size.tiny, text_color=color_tf(score_15m_buy))
-    table.cell(pnl, 2, 3, fmt_tf(s15_stoch_s, s15_trix_s, s15_adx_a, s15_dmi_s, score_15m_sell), text_size=size.tiny, text_color=color_tf(score_15m_sell))
-    table.cell(pnl, 0, 4, "30m (Est/TRIX/ADX/DMI)",  text_size=size.tiny, tooltip="Combinado 30m. Cor base: laranja.")
-    table.cell(pnl, 1, 4, fmt_tf(s30_stoch_b, s30_trix_b, s30_adx_a, s30_dmi_b, score_30m_buy),  text_size=size.tiny, text_color=color_tf(score_30m_buy))
-    table.cell(pnl, 2, 4, fmt_tf(s30_stoch_s, s30_trix_s, s30_adx_a, s30_dmi_s, score_30m_sell), text_size=size.tiny, text_color=color_tf(score_30m_sell))
-    table.cell(pnl, 0, 5, "60m (Est/TRIX/ADX/DMI)",  text_size=size.tiny, tooltip="Combinado 60m. Cor base: roxo.")
-    table.cell(pnl, 1, 5, fmt_tf(s60_stoch_b, s60_trix_b, s60_adx_a, s60_dmi_b, score_60m_buy),  text_size=size.tiny, text_color=color_tf(score_60m_buy))
-    table.cell(pnl, 2, 5, fmt_tf(s60_stoch_s, s60_trix_s, s60_adx_a, s60_dmi_s, score_60m_sell), text_size=size.tiny, text_color=color_tf(score_60m_sell))
+    // Setup por TF (Est/TRIX/DMI = DIREÇÃO, sem ADX) — luzes + X/3
+    // ADX aparece separadamente como marca de intensidade no gráfico (número TF grande)
+    table.cell(pnl, 0, 2, "5m (Est/TRIX/DMI) +ADX",   text_size=size.tiny, tooltip="Score de DIREÇÃO 5m (max 3). ADX aparece como número '1' grande no candle quando ativa (intensifica o movimento).")
+    table.cell(pnl, 1, 2, fmt_tf(s5_stoch_b, s5_trix_b, s5_dmi_b, score_5m_buy)   + (s5_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_5m_buy))
+    table.cell(pnl, 2, 2, fmt_tf(s5_stoch_s, s5_trix_s, s5_dmi_s, score_5m_sell)  + (s5_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_5m_sell))
+    table.cell(pnl, 0, 3, "15m (Est/TRIX/DMI) +ADX",  text_size=size.tiny, tooltip="ADX ativa → número '2' grande no candle.")
+    table.cell(pnl, 1, 3, fmt_tf(s15_stoch_b, s15_trix_b, s15_dmi_b, score_15m_buy)  + (s15_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_15m_buy))
+    table.cell(pnl, 2, 3, fmt_tf(s15_stoch_s, s15_trix_s, s15_dmi_s, score_15m_sell) + (s15_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_15m_sell))
+    table.cell(pnl, 0, 4, "30m (Est/TRIX/DMI) +ADX",  text_size=size.tiny, tooltip="ADX ativa → número '3' grande no candle.")
+    table.cell(pnl, 1, 4, fmt_tf(s30_stoch_b, s30_trix_b, s30_dmi_b, score_30m_buy)  + (s30_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_30m_buy))
+    table.cell(pnl, 2, 4, fmt_tf(s30_stoch_s, s30_trix_s, s30_dmi_s, score_30m_sell) + (s30_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_30m_sell))
+    table.cell(pnl, 0, 5, "60m (Est/TRIX/DMI) +ADX",  text_size=size.tiny, tooltip="ADX ativa → número '4' grande no candle.")
+    table.cell(pnl, 1, 5, fmt_tf(s60_stoch_b, s60_trix_b, s60_dmi_b, score_60m_buy)  + (s60_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_60m_buy))
+    table.cell(pnl, 2, 5, fmt_tf(s60_stoch_s, s60_trix_s, s60_dmi_s, score_60m_sell) + (s60_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_60m_sell))
     // Congruência agregada mantida como resumo rápido
     table.cell(pnl, 0, 6, "Cong 4/4 (5/15/30/60)",   text_size=size.tiny)
     table.cell(pnl, 1, 6, light(cong5_buy)  + light(cong15_buy)  + light(cong30_buy)  + light(cong60_buy)  + " = " + str.tostring(cong44_buy_score),  text_size=size.tiny, text_color=(cong44_buy_score  == 4 ? color.yellow : color.gray))
@@ -773,38 +783,59 @@ c_30m_sell  = color.new(color.orange, tone_from_score(score_30m_sell))
 c_60m_buy   = color.new(color.purple, tone_from_score(score_60m_buy))
 c_60m_sell  = color.new(color.purple, tone_from_score(score_60m_sell))
 
-// Pine v5: text= em plotshape SÓ aceita const string + limite total 64 plots.
-// Solução: 3 níveis por TF/direção (score 2, 3, 4). Score 1/4 dropado (ruído).
-// 4 TFs × 2 direções × 3 níveis = 24 plotshapes (cabe no limite).
-// 5m BUY (1.2 a 1.4)
-plotshape(show_5m_cmb and up_5m_buy and score_5m_buy == 2, title="5m BUY 1.2", location=location.belowbar, color=color.new(color.aqua, 55), style=shape.arrowup, size=size.small, text="1.2")
-plotshape(show_5m_cmb and up_5m_buy and score_5m_buy == 3, title="5m BUY 1.3", location=location.belowbar, color=color.new(color.aqua, 25), style=shape.arrowup, size=size.small, text="1.3")
-plotshape(show_5m_cmb and up_5m_buy and score_5m_buy == 4, title="5m BUY 1.4", location=location.belowbar, color=color.new(color.aqua,  0), style=shape.arrowup, size=size.small, text="1.4")
-// 5m SELL (1.2 a 1.4)
-plotshape(show_5m_cmb and up_5m_sell and score_5m_sell == 2, title="5m SELL 1.2", location=location.abovebar, color=color.new(color.aqua, 55), style=shape.arrowdown, size=size.small, text="1.2")
-plotshape(show_5m_cmb and up_5m_sell and score_5m_sell == 3, title="5m SELL 1.3", location=location.abovebar, color=color.new(color.aqua, 25), style=shape.arrowdown, size=size.small, text="1.3")
-plotshape(show_5m_cmb and up_5m_sell and score_5m_sell == 4, title="5m SELL 1.4", location=location.abovebar, color=color.new(color.aqua,  0), style=shape.arrowdown, size=size.small, text="1.4")
-// 15m BUY (2.2 a 2.4)
-plotshape(show_15m_cmb and up_15m_buy and score_15m_buy == 2, title="15m BUY 2.2", location=location.belowbar, color=color.new(color.lime, 55), style=shape.arrowup, size=size.small, text="2.2")
-plotshape(show_15m_cmb and up_15m_buy and score_15m_buy == 3, title="15m BUY 2.3", location=location.belowbar, color=color.new(color.lime, 25), style=shape.arrowup, size=size.small, text="2.3")
-plotshape(show_15m_cmb and up_15m_buy and score_15m_buy == 4, title="15m BUY 2.4", location=location.belowbar, color=color.new(color.lime,  0), style=shape.arrowup, size=size.small, text="2.4")
-// 15m SELL (2.2 a 2.4)
-plotshape(show_15m_cmb and up_15m_sell and score_15m_sell == 2, title="15m SELL 2.2", location=location.abovebar, color=color.new(color.lime, 55), style=shape.arrowdown, size=size.small, text="2.2")
-plotshape(show_15m_cmb and up_15m_sell and score_15m_sell == 3, title="15m SELL 2.3", location=location.abovebar, color=color.new(color.lime, 25), style=shape.arrowdown, size=size.small, text="2.3")
-plotshape(show_15m_cmb and up_15m_sell and score_15m_sell == 4, title="15m SELL 2.4", location=location.abovebar, color=color.new(color.lime,  0), style=shape.arrowdown, size=size.small, text="2.4")
-// 30m BUY (3.2 a 3.4)
-plotshape(show_30m_cmb and up_30m_buy and score_30m_buy == 2, title="30m BUY 3.2", location=location.belowbar, color=color.new(color.orange, 55), style=shape.arrowup, size=size.small, text="3.2")
-plotshape(show_30m_cmb and up_30m_buy and score_30m_buy == 3, title="30m BUY 3.3", location=location.belowbar, color=color.new(color.orange, 25), style=shape.arrowup, size=size.small, text="3.3")
-plotshape(show_30m_cmb and up_30m_buy and score_30m_buy == 4, title="30m BUY 3.4", location=location.belowbar, color=color.new(color.orange,  0), style=shape.arrowup, size=size.small, text="3.4")
-// 30m SELL (3.2 a 3.4)
-plotshape(show_30m_cmb and up_30m_sell and score_30m_sell == 2, title="30m SELL 3.2", location=location.abovebar, color=color.new(color.orange, 55), style=shape.arrowdown, size=size.small, text="3.2")
-plotshape(show_30m_cmb and up_30m_sell and score_30m_sell == 3, title="30m SELL 3.3", location=location.abovebar, color=color.new(color.orange, 25), style=shape.arrowdown, size=size.small, text="3.3")
-plotshape(show_30m_cmb and up_30m_sell and score_30m_sell == 4, title="30m SELL 3.4", location=location.abovebar, color=color.new(color.orange,  0), style=shape.arrowdown, size=size.small, text="3.4")
-// 60m BUY (4.2 a 4.4)
-plotshape(show_60m_cmb and up_60m_buy and score_60m_buy == 2, title="60m BUY 4.2", location=location.belowbar, color=color.new(color.purple, 55), style=shape.arrowup, size=size.small, text="4.2")
-plotshape(show_60m_cmb and up_60m_buy and score_60m_buy == 3, title="60m BUY 4.3", location=location.belowbar, color=color.new(color.purple, 25), style=shape.arrowup, size=size.small, text="4.3")
-plotshape(show_60m_cmb and up_60m_buy and score_60m_buy == 4, title="60m BUY 4.4", location=location.belowbar, color=color.new(color.purple,  0), style=shape.arrowup, size=size.small, text="4.4")
-// 60m SELL (4.2 a 4.4)
-plotshape(show_60m_cmb and up_60m_sell and score_60m_sell == 2, title="60m SELL 4.2", location=location.abovebar, color=color.new(color.purple, 55), style=shape.arrowdown, size=size.small, text="4.2")
-plotshape(show_60m_cmb and up_60m_sell and score_60m_sell == 3, title="60m SELL 4.3", location=location.abovebar, color=color.new(color.purple, 25), style=shape.arrowdown, size=size.small, text="4.3")
-plotshape(show_60m_cmb and up_60m_sell and score_60m_sell == 4, title="60m SELL 4.4", location=location.abovebar, color=color.new(color.purple,  0), style=shape.arrowdown, size=size.small, text="4.4")
+// Setas MTF: 2 níveis por TF/direção (score 2/3 e 3/3). Score 1/3 dropado.
+// Ordenação: <tf>.<score> onde tf=1..4 (5/15/30/60m) e score=2..3
+// 4 TFs × 2 direções × 2 níveis = 16 plotshapes
+// 5m BUY (1.2, 1.3)
+plotshape(show_5m_cmb and up_5m_buy and score_5m_buy == 2, title="5m BUY 1.2", location=location.belowbar, color=color.new(color.aqua, 40), style=shape.arrowup, size=size.small, text="1.2")
+plotshape(show_5m_cmb and up_5m_buy and score_5m_buy == 3, title="5m BUY 1.3", location=location.belowbar, color=color.new(color.aqua,  0), style=shape.arrowup, size=size.small, text="1.3")
+// 5m SELL
+plotshape(show_5m_cmb and up_5m_sell and score_5m_sell == 2, title="5m SELL 1.2", location=location.abovebar, color=color.new(color.aqua, 40), style=shape.arrowdown, size=size.small, text="1.2")
+plotshape(show_5m_cmb and up_5m_sell and score_5m_sell == 3, title="5m SELL 1.3", location=location.abovebar, color=color.new(color.aqua,  0), style=shape.arrowdown, size=size.small, text="1.3")
+// 15m BUY (2.2, 2.3)
+plotshape(show_15m_cmb and up_15m_buy and score_15m_buy == 2, title="15m BUY 2.2", location=location.belowbar, color=color.new(color.lime, 40), style=shape.arrowup, size=size.small, text="2.2")
+plotshape(show_15m_cmb and up_15m_buy and score_15m_buy == 3, title="15m BUY 2.3", location=location.belowbar, color=color.new(color.lime,  0), style=shape.arrowup, size=size.small, text="2.3")
+// 15m SELL
+plotshape(show_15m_cmb and up_15m_sell and score_15m_sell == 2, title="15m SELL 2.2", location=location.abovebar, color=color.new(color.lime, 40), style=shape.arrowdown, size=size.small, text="2.2")
+plotshape(show_15m_cmb and up_15m_sell and score_15m_sell == 3, title="15m SELL 2.3", location=location.abovebar, color=color.new(color.lime,  0), style=shape.arrowdown, size=size.small, text="2.3")
+// 30m BUY (3.2, 3.3)
+plotshape(show_30m_cmb and up_30m_buy and score_30m_buy == 2, title="30m BUY 3.2", location=location.belowbar, color=color.new(color.orange, 40), style=shape.arrowup, size=size.small, text="3.2")
+plotshape(show_30m_cmb and up_30m_buy and score_30m_buy == 3, title="30m BUY 3.3", location=location.belowbar, color=color.new(color.orange,  0), style=shape.arrowup, size=size.small, text="3.3")
+// 30m SELL
+plotshape(show_30m_cmb and up_30m_sell and score_30m_sell == 2, title="30m SELL 3.2", location=location.abovebar, color=color.new(color.orange, 40), style=shape.arrowdown, size=size.small, text="3.2")
+plotshape(show_30m_cmb and up_30m_sell and score_30m_sell == 3, title="30m SELL 3.3", location=location.abovebar, color=color.new(color.orange,  0), style=shape.arrowdown, size=size.small, text="3.3")
+// 60m BUY (4.2, 4.3)
+plotshape(show_60m_cmb and up_60m_buy and score_60m_buy == 2, title="60m BUY 4.2", location=location.belowbar, color=color.new(color.purple, 40), style=shape.arrowup, size=size.small, text="4.2")
+plotshape(show_60m_cmb and up_60m_buy and score_60m_buy == 3, title="60m BUY 4.3", location=location.belowbar, color=color.new(color.purple,  0), style=shape.arrowup, size=size.small, text="4.3")
+// 60m SELL
+plotshape(show_60m_cmb and up_60m_sell and score_60m_sell == 2, title="60m SELL 4.2", location=location.abovebar, color=color.new(color.purple, 40), style=shape.arrowdown, size=size.small, text="4.2")
+plotshape(show_60m_cmb and up_60m_sell and score_60m_sell == 3, title="60m SELL 4.3", location=location.abovebar, color=color.new(color.purple,  0), style=shape.arrowdown, size=size.small, text="4.3")
+
+// ============================== MARCA ADX (INTENSIFICADOR) ===================
+// Quando ADX de um TF ATIVA (cruzou 30↑ OU banda 70-80 caindo) E pelo menos 2/3
+// dos indicadores daquele TF apontam na mesma direção → mostra número grande do
+// TF (1=5m, 2=15m, 3=30m, 4=60m) no candle, tonalidade máxima (opaca).
+// "ADX direciona a intensidade" — sem ele o setup ainda vale mas sem força extra.
+
+adx_activate_5m  = s5_adx_a  and not s5_adx_a[1]
+adx_activate_15m = s15_adx_a and not s15_adx_a[1]
+adx_activate_30m = s30_adx_a and not s30_adx_a[1]
+adx_activate_60m = s60_adx_a and not s60_adx_a[1]
+
+adx_mark_5m_buy   = adx_activate_5m  and score_5m_buy  >= 2
+adx_mark_5m_sell  = adx_activate_5m  and score_5m_sell >= 2
+adx_mark_15m_buy  = adx_activate_15m and score_15m_buy  >= 2
+adx_mark_15m_sell = adx_activate_15m and score_15m_sell >= 2
+adx_mark_30m_buy  = adx_activate_30m and score_30m_buy  >= 2
+adx_mark_30m_sell = adx_activate_30m and score_30m_sell >= 2
+adx_mark_60m_buy  = adx_activate_60m and score_60m_buy  >= 2
+adx_mark_60m_sell = adx_activate_60m and score_60m_sell >= 2
+
+plotshape(adx_mark_5m_buy,   title="ADX 5m BUY",   location=location.belowbar, color=color.new(color.aqua,   0), style=shape.labelup,   size=size.large, text="1", textcolor=color.white)
+plotshape(adx_mark_5m_sell,  title="ADX 5m SELL",  location=location.abovebar, color=color.new(color.aqua,   0), style=shape.labeldown, size=size.large, text="1", textcolor=color.white)
+plotshape(adx_mark_15m_buy,  title="ADX 15m BUY",  location=location.belowbar, color=color.new(color.lime,   0), style=shape.labelup,   size=size.large, text="2", textcolor=color.white)
+plotshape(adx_mark_15m_sell, title="ADX 15m SELL", location=location.abovebar, color=color.new(color.lime,   0), style=shape.labeldown, size=size.large, text="2", textcolor=color.white)
+plotshape(adx_mark_30m_buy,  title="ADX 30m BUY",  location=location.belowbar, color=color.new(color.orange, 0), style=shape.labelup,   size=size.large, text="3", textcolor=color.white)
+plotshape(adx_mark_30m_sell, title="ADX 30m SELL", location=location.abovebar, color=color.new(color.orange, 0), style=shape.labeldown, size=size.large, text="3", textcolor=color.white)
+plotshape(adx_mark_60m_buy,  title="ADX 60m BUY",  location=location.belowbar, color=color.new(color.purple, 0), style=shape.labelup,   size=size.large, text="4", textcolor=color.white)
+plotshape(adx_mark_60m_sell, title="ADX 60m SELL", location=location.abovebar, color=color.new(color.purple, 0), style=shape.labeldown, size=size.large, text="4", textcolor=color.white)
