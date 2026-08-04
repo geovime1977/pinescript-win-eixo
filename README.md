@@ -21,10 +21,32 @@ pinescript-win-eixo/
 │   ├── strategy.ntsl        # Port pra ProfitChart Pro (Nelogica)
 │   └── EixoWIN.mq5          # Port pra MetaTrader 5 (Expert Advisor)
 └── docs/
-    ├── COMO-INSTALAR-BTG.md # Passo a passo TradingView-BTG
-    ├── COMO-INSTALAR-MT5.md # Passo a passo MetaTrader 5
-    └── ALERTAS-CONFIG.md    # Setup de alertas mobile/email
+    ├── COMO-INSTALAR-BTG.md    # Passo a passo TradingView-BTG
+    ├── COMO-INSTALAR-MT5.md    # Passo a passo MetaTrader 5
+    ├── COMO-INSTALAR-PROFIT.md # Passo a passo Profit/Nelogica (NTSL)
+    └── ALERTAS-CONFIG.md       # Setup de alertas mobile/email
 ```
+
+## Versão NTSL (Profit / Nelogica)
+
+O arquivo `src/strategy.ntsl` foi **validado contra o Manual NTSL oficial v4.3 (10/04/2026)** em 2026-08-04. Correções aplicadas contra a versão inicial que continha placeholders inválidos:
+
+| Erro anterior | Correção NTSL |
+|---|---|
+| `Parametro` | `input` |
+| `Data`, `Hora`, `Minuto` | `Date`, `Time` (HHMM) |
+| `Estocastico(len)` | `FastStochastic(len)` |
+| `Media(serie, per)` | `Media(per, serie)` — ordem invertida |
+| `ADX(len)` | `ADX(periodo, media)` — 2 parâmetros |
+| `DMIMais/DMIMenos` | `DiPDiM(len)\|0\|` e `DiPDiM(len)\|1\|` |
+| `SetStopLoss(px)` | `SellToCoverStop` / `BuyToCoverStop` |
+| `ExitLongAtLimit` | `SellToCoverLimit(preço, qty)` |
+| `ExitShortAtLimit` | `BuyToCoverLimit(preço, qty)` |
+| `ExitLong/ShortAtMarket` | `ClosePosition` |
+| operador `div` | `IntPortion(a / b)` — NTSL só tem `/` (float) |
+| sem `begin ... end;` principal | envelope adicionado |
+
+Ver `docs/COMO-INSTALAR-PROFIT.md` para importar no editor de estratégias do Profit.
 
 ## Instalação rápida
 
