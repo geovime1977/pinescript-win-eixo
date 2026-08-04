@@ -701,6 +701,106 @@ if show_panel and barstate.islast
     table.cell(pnl, 1, 10, str.tostring(n_flips_buy)  + " → -" + str.tostring(5 * n_flips_buy)  + " ctr", text_size=size.tiny, text_color=(n_flips_buy  > 0 ? color.orange : color.gray))
     table.cell(pnl, 2, 10, str.tostring(n_flips_sell) + " → -" + str.tostring(5 * n_flips_sell) + " ctr", text_size=size.tiny, text_color=(n_flips_sell > 0 ? color.orange : color.gray))
 
+// ============================== RODAPÉ: ÚLTIMO SCORE POR TF ==================
+// Rastreia a última vez que o score de cada TF/direção mudou.
+// Formato do timestamp: HH:MM se for hoje, DD/MM HH:MM se for outro dia.
+
+var int last_t_5m_buy   = na
+var int last_t_5m_sell  = na
+var int last_t_15m_buy  = na
+var int last_t_15m_sell = na
+var int last_t_30m_buy  = na
+var int last_t_30m_sell = na
+var int last_t_60m_buy  = na
+var int last_t_60m_sell = na
+var int last_s_5m_buy   = 0
+var int last_s_5m_sell  = 0
+var int last_s_15m_buy  = 0
+var int last_s_15m_sell = 0
+var int last_s_30m_buy  = 0
+var int last_s_30m_sell = 0
+var int last_s_60m_buy  = 0
+var int last_s_60m_sell = 0
+
+if score_5m_buy != score_5m_buy[1]
+    last_t_5m_buy := time
+    last_s_5m_buy := score_5m_buy
+if score_5m_sell != score_5m_sell[1]
+    last_t_5m_sell := time
+    last_s_5m_sell := score_5m_sell
+if score_15m_buy != score_15m_buy[1]
+    last_t_15m_buy := time
+    last_s_15m_buy := score_15m_buy
+if score_15m_sell != score_15m_sell[1]
+    last_t_15m_sell := time
+    last_s_15m_sell := score_15m_sell
+if score_30m_buy != score_30m_buy[1]
+    last_t_30m_buy := time
+    last_s_30m_buy := score_30m_buy
+if score_30m_sell != score_30m_sell[1]
+    last_t_30m_sell := time
+    last_s_30m_sell := score_30m_sell
+if score_60m_buy != score_60m_buy[1]
+    last_t_60m_buy := time
+    last_s_60m_buy := score_60m_buy
+if score_60m_sell != score_60m_sell[1]
+    last_t_60m_sell := time
+    last_s_60m_sell := score_60m_sell
+
+pad2(n) => n < 10 ? "0" + str.tostring(n) : str.tostring(n)
+
+fmt_time(t) =>
+    result = "—"
+    if not na(t)
+        same_day = dayofmonth(timenow) == dayofmonth(t) and month(timenow) == month(t) and year(timenow) == year(t)
+        hh = pad2(hour(t))
+        mm = pad2(minute(t))
+        if same_day
+            result := hh + ":" + mm
+        else
+            result := pad2(dayofmonth(t)) + "/" + pad2(month(t)) + " " + hh + ":" + mm
+    result
+
+fmt_cell(score, t) =>
+    str.tostring(score) + "/3 · " + fmt_time(t)
+
+color_cell(score) => score == 3 ? color.new(color.yellow, 0) : score == 2 ? color.new(color.orange, 0) : score == 1 ? color.new(color.gray, 0) : color.new(color.gray, 60)
+
+pos_rodape = position.bottom_center
+var table rdp = table.new(pos_rodape, 5, 5, border_width=1, bgcolor=color.new(color.black, 70))
+
+if show_panel and barstate.islast
+    table.clear(rdp, 0, 0, 4, 4)
+    table.cell(rdp, 0, 0, "ÚLT. SCORE",  bgcolor=color.new(color.black, 30), text_color=color.white, text_size=size.tiny)
+    table.cell(rdp, 1, 0, "5m",          bgcolor=color.new(color.aqua,   50), text_color=color.white, text_size=size.tiny)
+    table.cell(rdp, 2, 0, "15m",         bgcolor=color.new(color.lime,   50), text_color=color.white, text_size=size.tiny)
+    table.cell(rdp, 3, 0, "30m",         bgcolor=color.new(color.orange, 50), text_color=color.white, text_size=size.tiny)
+    table.cell(rdp, 4, 0, "60m",         bgcolor=color.new(color.purple, 50), text_color=color.white, text_size=size.tiny)
+    // linha BUY
+    table.cell(rdp, 0, 1, "▲ BUY",       bgcolor=color.new(color.green, 60), text_color=color.white, text_size=size.tiny)
+    table.cell(rdp, 1, 1, fmt_cell(last_s_5m_buy,  last_t_5m_buy),  text_size=size.tiny, text_color=color_cell(last_s_5m_buy))
+    table.cell(rdp, 2, 1, fmt_cell(last_s_15m_buy, last_t_15m_buy), text_size=size.tiny, text_color=color_cell(last_s_15m_buy))
+    table.cell(rdp, 3, 1, fmt_cell(last_s_30m_buy, last_t_30m_buy), text_size=size.tiny, text_color=color_cell(last_s_30m_buy))
+    table.cell(rdp, 4, 1, fmt_cell(last_s_60m_buy, last_t_60m_buy), text_size=size.tiny, text_color=color_cell(last_s_60m_buy))
+    // linha SELL
+    table.cell(rdp, 0, 2, "▼ SELL",      bgcolor=color.new(color.red, 60), text_color=color.white, text_size=size.tiny)
+    table.cell(rdp, 1, 2, fmt_cell(last_s_5m_sell,  last_t_5m_sell),  text_size=size.tiny, text_color=color_cell(last_s_5m_sell))
+    table.cell(rdp, 2, 2, fmt_cell(last_s_15m_sell, last_t_15m_sell), text_size=size.tiny, text_color=color_cell(last_s_15m_sell))
+    table.cell(rdp, 3, 2, fmt_cell(last_s_30m_sell, last_t_30m_sell), text_size=size.tiny, text_color=color_cell(last_s_30m_sell))
+    table.cell(rdp, 4, 2, fmt_cell(last_s_60m_sell, last_t_60m_sell), text_size=size.tiny, text_color=color_cell(last_s_60m_sell))
+    // linha ADX (estado atual)
+    table.cell(rdp, 0, 3, "ADX ativo",   bgcolor=color.new(color.yellow, 40), text_color=color.black, text_size=size.tiny)
+    table.cell(rdp, 1, 3, s5_adx_a  ? "🟢" : "⚪", text_size=size.tiny)
+    table.cell(rdp, 2, 3, s15_adx_a ? "🟢" : "⚪", text_size=size.tiny)
+    table.cell(rdp, 3, 3, s30_adx_a ? "🟢" : "⚪", text_size=size.tiny)
+    table.cell(rdp, 4, 3, s60_adx_a ? "🟢" : "⚪", text_size=size.tiny)
+    // linha legenda das cores
+    table.cell(rdp, 0, 4, "Legenda",     bgcolor=color.new(color.gray, 40), text_color=color.white, text_size=size.tiny)
+    table.cell(rdp, 1, 4, "3/3=amarelo", text_size=size.tiny, text_color=color.yellow)
+    table.cell(rdp, 2, 4, "2/3=laranja", text_size=size.tiny, text_color=color.orange)
+    table.cell(rdp, 3, 4, "1/3=cinza",   text_size=size.tiny, text_color=color.gray)
+    table.cell(rdp, 4, 4, "hoje HH:MM · outro DD/MM HH:MM", text_size=size.tiny, text_color=color.white)
+
 // ============================== SETAS + ALERTAS ==============================
 // Fluxo temporal:
 //   candle N   : preço toca Fibo 2x → sinaliza cond1 verde (âncora pendente)
