@@ -1,0 +1,59 @@
+//------------------------------------------------------------------
+// EixoWIN - Versao Enxuta v1 (base RSI, prova de compilacao)
+// Aplica no WIN 5min. Long+Short, EOD 17:30, sem scale-out.
+// Espelha 1:1 o padrao NTSL do exemplo comprovadamente aceito
+// pelo Profit (sintaxe pt: Se/entao/inicio/fim, e/ou, :=).
+//------------------------------------------------------------------
+
+begin
+
+//Calculos//
+vIFR := RSI(14, 0);
+R    := 5 * MinpriceIncrement;
+
+//Setup COMPRA: RSI cruzando 30 pra cima//
+SinalC := (vIFR[3] < 30) e (vIFR[0] >= 30) ou (vIFR[1] < 32) e (vIFR[0] >= 30);
+
+//Setup VENDA: RSI cruzando 70 pra baixo//
+SinalV := (vIFR[3] > 70) e (vIFR[0] <= 70) ou (vIFR[1] > 68) e (vIFR[0] <= 70);
+
+//Marca visual dos gatilhos//
+Se (BuyPosition = 0) e (SellPosition = 0) e SinalC entao PaintBar(Clazul);
+Se (BuyPosition = 0) e (SellPosition = 0) e SinalV entao PaintBar(Clvermelho);
+
+//Busca entrada COMPRA//
+Se (BuyPosition = 0) e (SellPosition = 0) e SinalC e (Time < 1700) entao
+inicio
+  AlvoC := Maxima + (Maxima - Minima) * 1.5;
+  StopC := Minima - R;
+  Buystop(Maxima, Maxima);
+fim;
+
+//Busca entrada VENDA//
+Se (BuyPosition = 0) e (SellPosition = 0) e SinalV e (Time < 1700) entao
+inicio
+  AlvoV := Minima - (Maxima - Minima) * 1.5;
+  StopV := Maxima + R;
+  Sellstop(Minima, Minima);
+fim;
+
+//Se comprado, gerenciar saida//
+Se Isbought entao
+inicio
+  Selltocoverlimit(AlvoC);
+  Selltocoverstop(StopC, StopC);
+  Se (Minima < StopC) entao ClosePosition;
+fim;
+
+//Se vendido, gerenciar saida//
+Se Issold entao
+inicio
+  Buytocoverlimit(AlvoV);
+  Buytocoverstop(StopV, StopV);
+  Se (Maxima > StopV) entao ClosePosition;
+fim;
+
+//EOD forcado 17:30//
+Se (Time >= 1730) entao ClosePosition;
+
+end;
