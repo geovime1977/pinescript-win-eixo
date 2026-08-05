@@ -1,6 +1,6 @@
 # pinescript-win-eixo
 
-Estratégia Day Trade WIN — Congruência MTF + Fibonacci de Abertura, implementada como Pine Script v5 para rodar nativamente no **TradingView-BTG**.
+Estratégia Day Trade WIN — **Congruência MTF + Fibonacci de Abertura**, implementada como Pine Script v5 (v14 / 04-08-2026) para rodar nativamente no **TradingView-BTG**.
 
 ## Escopo
 
@@ -15,10 +15,11 @@ Este é o **primeiro projeto que roda com dados WIN reais em tempo real**, aprov
 ```
 pinescript-win-eixo/
 ├── src/
-│   ├── indicator.pine       # Sinais X/4 no gráfico + alertas (X ajustável)
-│   ├── strategy.pine        # Backtest com scale-out por Fibo
-│   ├── macd60.pine          # Monitor MACD H1 (12/26/9) standalone
-│   ├── strategy.ntsl        # Port pra ProfitChart Pro (Nelogica)
+│   ├── indicator.pine       # Sinais X/3 (v14) no gráfico + alertas
+│   ├── strategy.pine        # Backtest v14 com scale-out por Fibo
+│   ├── strategy-v1.ntsl     # NTSL enxuta (prova de compilação Profit)
+│   ├── strategy.ntsl        # NTSL v14 completa (Profit / Nelogica)
+│   ├── macd60.pine          # Monitor MACD H1 standalone
 │   └── EixoWIN.mq5          # Port pra MetaTrader 5 (Expert Advisor)
 └── docs/
     ├── COMO-INSTALAR-BTG.md    # Passo a passo TradingView-BTG
@@ -27,84 +28,110 @@ pinescript-win-eixo/
     └── ALERTAS-CONFIG.md       # Setup de alertas mobile/email
 ```
 
-## Versão NTSL (Profit / Nelogica)
+## Spec canônica v14 (04-08-2026)
 
-O arquivo `src/strategy.ntsl` foi **validado contra o Manual NTSL oficial v4.3 (10/04/2026)** em 2026-08-04. Correções aplicadas contra a versão inicial que continha placeholders inválidos:
+**TF operacional:** 1 minuto (gatilho + entrada)
+**TFs de análise:** 5 · 15 · 30 · 60 (sem análise em Diário)
 
-| Erro anterior | Correção NTSL |
+**Indicadores por TF (5/15/30/60):**
+
+| Papel | Indicador | Parâmetros |
+|---|---|---|
+| Decisão | Estocástico Lento | (K=8, D=3, SMA duplo) |
+| Decisão | TRIX | (9, MMA 3) |
+| Decisão | DI+/DI- | (8, 8) |
+| **Intensidade** (não pontua) | ADX | (8, 8) |
+
+**Filtro contextual:** MACD 60m (12, 26, 9, close) — não pontua no score, marca visual "M60" no gráfico + linha no painel.
+
+**Score X/3 por TF:** Estoc + TRIX + DI± na direção. ADX fora do cálculo.
+
+**Sizing:** `5 × N_TFs_com_3/3` (mín 5, máx 20)
+
+| N_TFs 3/3 | Contratos |
 |---|---|
-| `Parametro` | `input` |
-| `Data`, `Hora`, `Minuto` | `Date`, `Time` (HHMM) |
-| `Estocastico(len)` | `FastStochastic(len)` |
-| `Media(serie, per)` | `Media(per, serie)` — ordem invertida |
-| `ADX(len)` | `ADX(periodo, media)` — 2 parâmetros |
-| `DMIMais/DMIMenos` | `DiPDiM(len)\|0\|` e `DiPDiM(len)\|1\|` |
-| `SetStopLoss(px)` | `SellToCoverStop` / `BuyToCoverStop` |
-| `ExitLongAtLimit` | `SellToCoverLimit(preço, qty)` |
-| `ExitShortAtLimit` | `BuyToCoverLimit(preço, qty)` |
-| `ExitLong/ShortAtMarket` | `ClosePosition` |
-| operador `div` | `IntPortion(a / b)` — NTSL só tem `/` (float) |
-| sem `begin ... end;` principal | envelope adicionado |
+| 0 | 5 (mínimo) |
+| 1 | 5 |
+| 2 | 10 |
+| 3 | 15 |
+| 4 | 20 |
 
-Ver `docs/COMO-INSTALAR-PROFIT.md` para importar no editor de estratégias do Profit.
+**Gate de entrada (v14):**
+1. Preço bate no Fibo pela 2ª vez
+2. Candle da 2ª batida fecha **acima** (compra) ou **abaixo** (venda) do nível
+3. Entrada = abertura do candle **seguinte**
+
+Spec detalhada: `~/vault/meus-projetos/01 - Profissional/Projetos/Estratégia Day Trade WIN — Congruência MTF + Fibo de Abertura.md`
 
 ## Instalação rápida
 
 1. Abrir o gráfico BTG em https://app.btgpactual.com/homebroker/chart
-2. Buscar WINQ26 (ou vencimento atual), timeframe 1m
+2. Buscar WINQ26 (ou vencimento atual), timeframe **1min**
 3. Abrir Pine Editor
-4. Colar `src/indicator.pine` → Adicionar ao gráfico
-5. (Opcional) Colar `src/macd60.pine` num painel separado → Adicionar (monitor MACD H1)
+4. Colar `src/indicator.pine` → **Add to chart**
+5. (Opcional) Colar `src/macd60.pine` num painel separado → Add (monitor MACD H1)
 6. Configurar alerta seguindo `docs/ALERTAS-CONFIG.md`
 
 Detalhes: `docs/COMO-INSTALAR-BTG.md`.
 
-## Módulo MACD H1 (macd60.pine)
+## Codificação das setas MTF no gráfico
 
-Indicador **standalone** que puxa MACD (12/26/9 default) do timeframe **60 minutos** independente do gráfico atual, via `request.security`. Serve como filtro de contexto pra confirmar direção dos sinais do EixoWIN:
+Formato: `<TF>.<indicadores>` com números.
 
-- **MACD H1 cruzou pra cima** → viés comprador — reforça sinais BUY do EixoWIN
-- **MACD H1 cruzou pra baixo** → viés vendedor — reforça sinais SELL do EixoWIN
-- **MACD H1 sem cruzamento recente** → lateralidade em H1, prefira ficar de fora
+| Código de TF | TF |
+|---|---|
+| 1 | 5min |
+| 2 | 15min |
+| 3 | 30min |
+| 4 | 60min |
 
-**Uso recomendado:** aplicar em painel separado (não overlay), abaixo do gráfico principal do WIN. Assim você vê `indicator.pine` no gráfico + `macd60.pine` embaixo, ambos ao mesmo tempo.
+| Código de indicador | Indicador |
+|---|---|
+| 1 | Estocástico Lento |
+| 2 | TRIX |
+| 3 | DI+/DI- |
 
-**Alertas disponíveis (3 opções):**
-1. `MACD H1 - Cruzamento (unico)` — cabe no plano free (1 alerta cobre compra e venda)
-2. `MACD H1 - CRUZAMENTO COMPRA` — requer plano Plus+ (múltiplos alertas)
-3. `MACD H1 - CRUZAMENTO VENDA` — requer plano Plus+
+Exemplos:
+- 🔺 `4.1.2.3` (abaixo do candle) = 60m, os 3 indicadores alinhados na compra
+- 🔺 `2.3` (abaixo) = 15m, só DI na compra
+- 🔻 `3.1.2` (acima) = 30m, Estoc + TRIX na venda
 
-**Uso no MT5:** equivalente já está integrado no `EixoWIN.mq5` (função `CheckMacdH1Cross`) via `iMACD(_Symbol, PERIOD_H1, 12, 26, 9, PRICE_CLOSE)`, disparando `Alert` popup e `SendNotification` (push mobile). Quem operar via MT5 não precisa aplicar nada adicional — ver `docs/COMO-INSTALAR-MT5.md` §6.
+**Cores por TF:** aqua (5m) · lime (15m) · laranja (30m) · roxo (60m).
+**Cor MACD 60m:** cinza — marca "M60" separada.
+**Cor ADX ativo:** mesma cor do TF — marca "A5"/"A15"/"A30"/"A60".
 
-## MT5 mobile — status
+Cada TF ocupa uma **lane vertical própria** proporcional ao ATR(14), evitando sobreposição quando múltiplos TFs disparam no mesmo candle.
 
-- Acesso à conta MT5 pelo **app celular validado em 2026-08-04**
-- MetaQuotes permite **apenas 1 sessão ativa por conta** → mobile e desktop não coexistem sem deslogar um dos lados
-- Recomendação: EA rodando no desktop + celular só recebendo push (`InpMacdAlertPush=true`)
-- Detalhes de convivência mobile/desktop em `docs/COMO-INSTALAR-MT5.md` §0
+## Versão NTSL (Profit / Nelogica)
 
-## Estratégia canônica
+O arquivo `src/strategy.ntsl` (v14) foi reescrito em sintaxe pt (`Se/entao/inicio/fim`, `e/ou`, `:=`) alinhada ao exemplo de código NTSL comprovadamente aceito pelo Profit.
 
-Ver nota no vault: `~/vault/meus-projetos/01 - Profissional/Projetos/Estratégia Day Trade WIN — Congruência MTF + Fibo de Abertura.md`
+Diferenças estruturais NTSL vs Pine:
+- NTSL **não suporta** `request.security` — cálculos MTF viram proxies via períodos dilatados do ADX no próprio 5m (`ADX(24)`, `ADX(48)`, `ADX(96)`)
+- Scale-out reduzido de 10 alvos → 2 alvos (`U150`/`U300` para compra; `L150`/`L300` para venda)
+- Sintaxe portuguesa: `Se ... entao inicio ... fim;` no lugar de `if ... then begin ... end;`
+
+Ver `docs/COMO-INSTALAR-PROFIT.md` para importar no editor de estratégias do Profit.
 
 ## Regra de execução
 
-- **Timeframe operacional:** 1 minuto (gatilho, 2º toque)
-- **Timeframes de contexto:** 5min (TRIX, ADX) + 15/30/60m (congruência)
-- **Fibonacci:** projetado do 1º candle 5min do dia
-- **Gatilho:** score >= `min_score` (default 2/4; ajustável 1-4 no input do indicador)
-- **Sizing:** 5/10/15/20 contratos por congruência (0/1/2/3)
+- **Timeframe operacional:** 1 minuto (gatilho + entrada)
+- **Timeframes de análise:** 5min + 15min + 30min + 60min
+- **Fibonacci:** projetado do 1º candle 5min do dia (21 níveis: MID + U0..U450 + L0..L450)
+- **Gate:** 2ª batida em Fibo + candle fecha na direção + entra na abertura do seguinte
+- **Sizing:** 5 × N_TFs com 3/3 (mín 5, máx 20)
+- **Runner:** scale-out por flip de TF travado
 
 ## Limitações
 
 - Pine Script **não abre ordem** na corretora — você recebe o alerta e executa manualmente
-- **1 alerta ativo** no plano free do TradingView (o indicador está desenhado pra caber nisso)
+- **1 alerta ativo** no plano free do TradingView
 - **Backtest limitado** em profundidade histórica no plano free
-- **Comissões** modeladas no strategy: R$ 0,50/contrato/lado (ajustável nos inputs)
+- **Comissões** modeladas no strategy: R$ 0,50/contrato/lado (ajustável)
 
 ## Roadmap
 
-- [ ] v1 pushado (indicator + strategy + docs)
-- [ ] Testar em 3+ dias de pregão real
+- [x] v14 pushada (indicator + strategy + docs + NTSL)
+- [ ] Testar em 3+ dias de pregão real com v14
 - [ ] Ajustar tolerâncias baseado no comportamento observado
 - [ ] Migrar pra Windows/MT5 quando precisar de automação total de ordens

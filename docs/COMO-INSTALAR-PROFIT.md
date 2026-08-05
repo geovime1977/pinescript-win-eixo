@@ -78,18 +78,17 @@ Todos acessíveis clicando na engrenagem ⚙️ da estratégia → aba **Parâme
 
 ---
 
-## Ordem de execução da estratégia
+## Ordem de execução da estratégia v14
 
 1. **1º candle 5min do dia** → captura High/Low → gera 21 níveis Fibo (U0…U450, L0…L450, UMid)
-2. **A cada candle** → conta toques em cada nível (`e` = eventos, `b` = barras desde último toque)
-3. **1º toque em suporte** → arma BUY (`BuyFirstAgo := 0`)
-4. **2º toque em suporte dentro de `MaxGapTouches`** → confirma gatilho BUY
-5. **Filtros extras:** cruzamento Estocástico + TRIX na direção do trade dentro da janela
-6. **Anti-faca:** se todos 3 HTF (15/30/60m) estiverem 3/3 contra, bloqueia entrada
-7. **Sizing:** `QtyTotal = QtyBase × Cong44BuyScore` (5/10/15/20 contratos), limitado por `QtyCap`
-8. **Entrada:** `BuyAtMarket(QtyTotal)` + 3 `SellToCoverLimit` (150/300/450) + 1 `SellToCoverStop`
-9. **Saída antecipada:** 2 cruzamentos TRIX contra + toque em qualquer Fibo → `ClosePosition`
-10. **EOD:** após `EodTime` (17:55) → `ClosePosition`
+2. **A cada candle 5min** → conta toques em cada nível (`e` = eventos, `b` = barras desde último toque)
+3. **Indicadores no 5m:** Estocástico Lento (8,3), TRIX (9, MMA 3), DI+/DI- (8,8), ADX (8,8)
+4. **Score X/3 5m:** Estoc + TRIX + DI± alinhados na direção. Se 3/3 → TF 5m conta como alinhado
+5. **Congruência 15/30/60m:** proxies via ADX com períodos dilatados (24 / 48 / 96) — se ADX > 25 + DI direcionando, TF conta como alinhado
+6. **Sizing:** `QtyBase × NTfsAlinhados` (5/10/15/20 contratos), limitado por `QtyCap`
+7. **Gate v14:** 2ª batida em nível Fibo (`_e = 2`) E candle fecha `Close > nivel` (compra) ou `Close < nivel` (venda) → arma
+8. **Entrada:** no candle SEGUINTE ao armed (via `BuySignalV14 := BuyGateArmed[1]`) → `BuyAtMarket(QtyTotal)` + 2 `SellToCoverLimit` (U150/U300) + 1 `SellToCoverStop`
+9. **EOD:** após `EodTime` (17:55) → `ClosePosition`
 
 ---
 
@@ -129,8 +128,9 @@ O Raio-X do Gerenciador de Automações mostra o estado interno da estratégia e
 1. Está no gráfico de 5min? (não roda em outros timeframes)
 2. É após o 1º candle do dia? (Fibo só existe a partir do 2º candle 5m)
 3. `HasBase` está `True`? (adicionar `Plot(FibRange)` temporariamente para conferir)
-4. Score de congruência HTF chegou a pelo menos 1?
-5. Anti-faca não está bloqueando? (colocar `AntiFaca=0` temporariamente para testar)
+4. Já teve 2ª batida em algum Fibo hoje? (o gate v14 exige `_e = 2` em algum nível)
+5. Candle da 2ª batida fechou na direção correta? (compra: `Close > nivel`; venda: `Close < nivel`)
+6. `NTfsBuy` ou `NTfsSell` ≥ 1? (mesmo com mínimo 5, sizing depende dos TFs)
 
 ### "Ordens de scale-out não estão saindo"
 → `SellToCoverLimit`/`BuyToCoverLimit` só executam se preço atingir o limite. Se o dia não estender até U450/L450, as ordens ficam pendentes até EOD, onde `ClosePosition` cancela tudo e zera posição.
@@ -139,15 +139,18 @@ O Raio-X do Gerenciador de Automações mostra o estado interno da estratégia e
 → `SellToCoverStop`/`BuyToCoverStop` são ordens de stop-market. Se o preço romper `StopPrice`, dispara. Se não romper (que é o ideal), a ordem fica pendente e é cancelada no EOD.
 
 ### "Muitas entradas por dia"
-→ Aumentar `MinExtras` para 2 (exige Estoc **E** TRIX confirmando). Ou aumentar `MaxGapTouches` para 15 (dá mais tempo para o 2º toque validar padrão).
+→ Aumentar `MaxGapTouches` para 15 (dá mais tempo pro 2º toque). Ou reduzir `TolPct` pra 0.03 (toque mais estrito). Se ainda assim muito, considerar rodar só 1 direção (comentar bloco de venda ou de compra).
+
+### "Muitas entradas de baixa qualidade"
+→ O sizing mínimo é 5 mesmo com 0 TFs alinhados. Se quiser bloquear entradas sem congruência mínima, editar a condição da entrada para exigir `NTfsBuy >= 1` (idem venda).
 
 ---
 
-## Diferenças vs versão Pine Script
+## Diferenças vs versão Pine Script v14
 
-- **Timeframe base:** NTSL roda em 5min (Pine roda em 1min e puxa 5min via `request.security`)
-- **HTF congruência:** NTSL aproxima 15/30/60m via ADX com períodos dilatados (3×, 6×, 12× de 5m); Pine usa MTF nativo
-- **Scale-out:** NTSL usa 3 alvos (150/300/450); Pine usa 10 alvos (a versão original)
-- **Saída antecipada:** ambas usam 2 cruzamentos TRIX + toque em Fibo
+- **Timeframe base:** NTSL roda em 5min (Pine roda em 1min e puxa 5m/15m/30m/60m via `request.security`)
+- **HTF congruência:** NTSL aproxima 15/30/60m via ADX com períodos dilatados (24, 48, 96); Pine usa MTF nativo com Estoc + TRIX + DI+ADX por TF
+- **Scale-out:** NTSL usa 2 alvos (U150/U300 na compra, L150/L300 na venda); Pine usa scale-out por flip de TF
+- **Gate v14:** ambos usam a mesma regra — 2ª batida em Fibo + candle fecha na direção → entra na abertura do seguinte
 
-Se precisar do comportamento MTF nativo do Pine, migre para MT5 (`EixoWIN.mq5`) que usa `iMACD(_Symbol, PERIOD_H1, ...)` para timeframes reais.
+Se precisar do comportamento MTF nativo do Pine, migre para MT5 (`EixoWIN.mq5`) que usa `iCustom(_Symbol, PERIOD_H1, ...)` para timeframes reais.

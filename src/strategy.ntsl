@@ -1,156 +1,121 @@
 //------------------------------------------------------------------------------
-// Eixo Estrategico - WIN Day Trade | Strategy NTSL (Profit / Nelogica)
+// Eixo Estrategico - WIN Day Trade | Strategy X/3 (v14 - 04/08/2026)
 //------------------------------------------------------------------------------
 // APLICAR NO GRAFICO DE 5 MINUTOS DO WIN (mini indice).
-// Portado do Pine Script v5 (strategy.pine) e corrigido contra o Manual NTSL
-// oficial (Nelogica v4.3 - 10/04/2026).
+// Sintaxe pt (Se/entao/inicio/fim, e/ou) - compativel com Profit/Nelogica NTSL.
 //
-// Adaptacoes vs Pine:
-//   - Timeframe base 5min
-//   - Congruencia HTF aproximada por ADX/DiPDiM com periodos dilatados
-//   - Scale-out reduzido de 10 para 3 alvos (Fibo 150 / 300 / 450)
-//   - Estoc (FastStochastic), TRIX manual e ADX calculados no proprio 5m
+// Nota importante: NTSL nao suporta request.security multi-TF como Pine.
+// Esta versao roda todos os calculos no TF do grafico (5min). Para congruencia
+// aproximada de TFs maiores, usa periodos dilatados dos indicadores (× 3, × 6, × 12).
 //
-// Correcoes de sintaxe aplicadas (vs versao anterior gerada por engano):
-//   - Parametro          -> input
-//   - Data / Hora        -> Date / Time  (Time no formato HHMM)
-//   - Estocastico(len)   -> FastStochastic(len)
-//   - Media(serie, per)  -> Media(per, serie)   (ordem correta)
-//   - ADX(len)           -> ADX(periodo, media) (2 parametros)
-//   - DMIMais/DMIMenos   -> DiPDiM(len)|0| / DiPDiM(len)|1|
-//   - SetStopLoss(px)    -> SellToCoverStop / BuyToCoverStop
-//   - ExitLongAtLimit    -> SellToCoverLimit
-//   - ExitShortAtLimit   -> BuyToCoverLimit
-//   - ExitLong/ShortAtMarket -> ClosePosition
-//   - operador div       -> IntPortion(a / b)
-//   - envelope begin/end principal adicionado
+// Gate v14:
+//   1. 2a batida em nivel Fibo do 1o candle 5min do dia
+//   2. Candle da 2a batida fecha ACIMA (compra) ou ABAIXO (venda) do nivel
+//   3. Entrada na ABERTURA do candle SEGUINTE (via BuyStop/SellStop)
+//
+// Sizing: 5 x N_TFs alinhados (min 5, max 20).
+// Alvos: L150/U150 e L300/U300 (scale-out em 2 partes).
+// Stop: 0.5 x amplitude do 1o candle 5min.
+// EOD: 17:55 forca fechamento.
 //------------------------------------------------------------------------------
 
 input
-  TolPct           (0.05);   // Tolerancia toque (%)
-  GapBars          (3);      // Gap minimo entre eventos (barras 5m)
-  ResetGap         (15);     // Reset contador de toques
-  MaxGapTouches    (10);     // Max barras entre 1o e 2o toque
-  WaitAfterTouch   (1);      // Janela pos-2o toque pra confirmacao
-  MinExtras        (1);      // Confirmacoes minimas (Estoc + TRIX)
-  AdxMin           (25.0);   // ADX minimo pra congruencia HTF
-  AdxLenBase       (8);      // ADX periodo base (~5m)
-  AdxLenH15        (24);     // ADX aprox 15m (3 * 5m)
-  AdxLenH30        (48);     // ADX aprox 30m (6 * 5m)
-  AdxLenH60        (96);     // ADX aprox 60m (12 * 5m)
-  AdxMediaLen      (9);      // Suavizacao da media do ADX
-  EstocLen         (5);
-  EstocDLen        (3);
-  TrixLen          (9);
-  TrixMALen        (4);
-  StopFibPct       (0.5);    // Stop = 0.5 * amplitude do Fibo
-  SessionEndTime   (1730);   // HHMM - fim janela de entrada (17:30)
-  EodTime          (1755);   // HHMM - EOD forcado (17:55)
-  QtyBase          (5);      // Contratos base por TF confirmado
-  QtyCap           (20);     // Cap maximo total
-  AntiFaca         (1);      // 1 = bloqueia contra tendencia HTF forte, 0 = desliga
+  TolPct       (0.05);   // Tolerancia toque (%)
+  GapBars      (3);      // Gap min entre eventos
+  ResetGap     (15);     // Reset contador
+  MaxGapTouches(10);     // Max candles entre 1o e 2o toque
+  QtyBase      (5);      // Contratos por TF alinhado
+  QtyCap       (20);     // Cap total
+  EstocLen     (8);      // Estocastico Lento K
+  EstocDLen    (3);      // Estocastico Lento D
+  TrixLen      (9);      // TRIX
+  TrixMALen    (3);      // TRIX MMA
+  AdxLen       (8);      // ADX / DMI periodo
+  AdxMediaLen  (8);      // ADX media
+  StopFibPct   (0.5);    // Stop = 0.5 x amplitude Fibo
+  SessionEnd   (1730);   // HHMM - fim janela entrada
+  EodTime      (1755);   // HHMM - EOD forcado
 
 var
-  // Fibo do 1o candle de 5min do dia
+  // Fibo do 1o candle 5min do dia
   First5High, First5Low, FibRange : Float;
   HasBase : Boolean;
-
   U0, UMid, U50, U100, U150, U200, U250, U300, U350, U400, U450 : Float;
   L0, L50, L100, L150, L200, L250, L300, L350, L400, L450 : Float;
 
-  // Contadores de eventos e barras-desde
-  U0e,U50e,U100e,U150e,U200e,U250e,U300e,U350e,U400e,U450e : Integer;
-  L0e,L50e,L100e,L150e,L200e,L250e,L300e,L350e,L400e,L450e : Integer;
+  // Contadores de toque por nivel
+  U0e, U50e, U100e, U150e, U200e, U250e, U300e, U350e, U400e, U450e : Integer;
+  L0e, L50e, L100e, L150e, L200e, L250e, L300e, L350e, L400e, L450e : Integer;
   MidE : Integer;
-  U0b,U50b,U100b,U150b,U200b,U250b,U300b,U350b,U400b,U450b : Integer;
-  L0b,L50b,L100b,L150b,L200b,L250b,L300b,L350b,L400b,L450b : Integer;
+  U0b, U50b, U100b, U150b, U200b, U250b, U300b, U350b, U400b, U450b : Integer;
+  L0b, L50b, L100b, L150b, L200b, L250b, L300b, L350b, L400b, L450b : Integer;
   MidB : Integer;
 
-  // Estado do gatilho
-  BuyFirstAgo, BuySecondAgo, SellFirstAgo, SellSecondAgo : Integer;
-
-  // Indicadores
-  StochK, StochD : Float;
-  StochBarsUp, StochBarsDn : Integer;
-  Ema1, Ema2, Ema3, TrixVal, TrixMA : Float;
-  TrixBarsUp, TrixBarsDn : Integer;
-
+  // Indicadores no TF do grafico (5min)
+  StochRaw, StochK, StochD : Float;
+  StochBuy, StochSell : Boolean;
+  TrixVal, TrixMA : Float;
+  TrixBuy, TrixSell : Boolean;
   AdxV, DmP, DmN : Float;
-  Adx15, DmP15, DmN15 : Float;
-  Adx30, DmP30, DmN30 : Float;
-  Adx60, DmP60, DmN60 : Float;
+  DmiBuy, DmiSell : Boolean;
+  Score3Buy, Score3Sell : Integer;
+  Tf5Aligned3Buy, Tf5Aligned3Sell : Boolean;
 
-  Cong5Buy, Cong15Buy, Cong30Buy, Cong60Buy : Boolean;
-  Cong5Sell, Cong15Sell, Cong30Sell, Cong60Sell : Boolean;
-  Cong44BuyScore, Cong44SellScore : Integer;
-  Score15Buy, Score15Sell, Score30Buy, Score30Sell, Score60Buy, Score60Sell : Integer;
+  // Congruencia aproximada 15/30/60m via periodos dilatados no 5m
+  AdxV15, DmP15, DmN15 : Float;
+  AdxV30, DmP30, DmN30 : Float;
+  AdxV60, DmP60, DmN60 : Float;
+  Tf15Buy, Tf30Buy, Tf60Buy : Boolean;
+  Tf15Sell, Tf30Sell, Tf60Sell : Boolean;
+  NTfsBuy, NTfsSell : Integer;
 
-  BuyExtras, SellExtras : Integer;
-  BuyStochValid, BuyTrixValid, SellStochValid, SellTrixValid : Boolean;
-  BuyTouchOpen, SellTouchOpen : Boolean;
-  AntiFacaBuyOk, AntiFacaSellOk : Boolean;
-  BuySignalHit, SellSignalHit : Boolean;
+  // Gate v14
+  Tol : Float;
+  BuyGateArmed, SellGateArmed : Boolean;
+  BuyGateArmedPrev, SellGateArmedPrev : Boolean;
+  BuySignalV14, SellSignalV14 : Boolean;
 
-  QtyTotal : Integer;
-  StopPrice : Float;
-  Qty1, Qty2, Qty3 : Integer;
-
-  // Saida em 2 fases
-  LongTrixDnCount, ShortTrixUpCount : Integer;
-  LongExitArmed, ShortExitArmed : Boolean;
-  Trix1mCrossUp, Trix1mCrossDn : Boolean;
-  AnyFiboTouch : Boolean;
+  // Entrada/saida
+  QtyTotal, Qty1, Qty2 : Integer;
+  StopPrice, AlvoC1, AlvoC2, AlvoV1, AlvoV2 : Float;
 
   // Sessao
-  InEntryWindow, InEodWindow : Boolean;
-
-  Tol : Float;
-  IsNewDay : Boolean;
+  IsNewDay, InEntryWindow, InEodWindow : Boolean;
 
 begin
-  //----------------------------------------------------------------------------
-  // Detecta virada de dia (Date muda entre barras)
-  //----------------------------------------------------------------------------
+  //--------------------------------------------------------------------------
+  // Detecta virada de dia
+  //--------------------------------------------------------------------------
   IsNewDay := (Date <> Date[1]);
 
-  //----------------------------------------------------------------------------
-  // Captura Fibo do 1o candle 5min do dia (primeira barra apos virada)
-  //----------------------------------------------------------------------------
-  if IsNewDay then begin
-    First5High := High;
-    First5Low  := Low;
+  //--------------------------------------------------------------------------
+  // Captura Fibo do 1o candle 5min do dia
+  //--------------------------------------------------------------------------
+  Se IsNewDay entao inicio
+    First5High := Maxima;
+    First5Low  := Minima;
     FibRange   := First5High - First5Low;
     HasBase    := (FibRange > 0);
 
-    // Reset contadores diarios
-    U0e := 0;   U50e := 0;  U100e := 0; U150e := 0; U200e := 0;
+    // Reset contadores
+    U0e := 0;  U50e := 0;  U100e := 0; U150e := 0; U200e := 0;
     U250e := 0; U300e := 0; U350e := 0; U400e := 0; U450e := 0;
-    L0e := 0;   L50e := 0;  L100e := 0; L150e := 0; L200e := 0;
+    L0e := 0;  L50e := 0;  L100e := 0; L150e := 0; L200e := 0;
     L250e := 0; L300e := 0; L350e := 0; L400e := 0; L450e := 0;
     MidE := 0;
 
-    U0b := -1;   U50b := -1;  U100b := -1; U150b := -1; U200b := -1;
+    U0b := -1;  U50b := -1;  U100b := -1; U150b := -1; U200b := -1;
     U250b := -1; U300b := -1; U350b := -1; U400b := -1; U450b := -1;
-    L0b := -1;   L50b := -1;  L100b := -1; L150b := -1; L200b := -1;
+    L0b := -1;  L50b := -1;  L100b := -1; L150b := -1; L200b := -1;
     L250b := -1; L300b := -1; L350b := -1; L400b := -1; L450b := -1;
     MidB := -1;
+  fim;
 
-    BuyFirstAgo   := 999999;
-    BuySecondAgo  := 999999;
-    SellFirstAgo  := 999999;
-    SellSecondAgo := 999999;
-
-    LongTrixDnCount  := 0;
-    ShortTrixUpCount := 0;
-    LongExitArmed    := False;
-    ShortExitArmed   := False;
-  end;
-
-  //----------------------------------------------------------------------------
+  //--------------------------------------------------------------------------
   // Niveis Fibonacci
-  //----------------------------------------------------------------------------
-  if HasBase then begin
-    U0   := First5High + 0.00 * FibRange;
+  //--------------------------------------------------------------------------
+  Se HasBase entao inicio
+    U0   := First5High;
     UMid := (First5High + First5Low) / 2;
     U50  := First5High + 0.50 * FibRange;
     U100 := First5High + 1.00 * FibRange;
@@ -162,7 +127,7 @@ begin
     U400 := First5High + 4.00 * FibRange;
     U450 := First5High + 4.50 * FibRange;
 
-    L0   := First5Low - 0.00 * FibRange;
+    L0   := First5Low;
     L50  := First5Low - 0.50 * FibRange;
     L100 := First5Low - 1.00 * FibRange;
     L150 := First5Low - 1.50 * FibRange;
@@ -172,488 +137,316 @@ begin
     L350 := First5Low - 3.50 * FibRange;
     L400 := First5Low - 4.00 * FibRange;
     L450 := First5Low - 4.50 * FibRange;
-  end;
+  fim;
 
-  //----------------------------------------------------------------------------
-  // Contadores de toque por nivel (inline; NTSL nao suporta funcao com ref)
-  //----------------------------------------------------------------------------
-  if HasBase then begin
+  //--------------------------------------------------------------------------
+  // Contadores de toque por nivel (inline; NTSL nao aceita funcao com ref)
+  // Regra: se preco toca (Low <= level <= High com tolerancia) e nao havia
+  // toque recente (b < 0 ou > GapBars), incrementa contador. Se sem toque
+  // por > ResetGap barras, zera o contador.
+  //--------------------------------------------------------------------------
+  Se HasBase entao inicio
     // UMid
     Tol := UMid * TolPct / 100.0;
-    if ((Low - Tol) <= UMid) and (UMid <= (High + Tol)) then begin
-      if (MidB < 0) or (MidB > GapBars) then MidE := MidE + 1;
+    Se ((Minima - Tol) <= UMid) e (UMid <= (Maxima + Tol)) entao inicio
+      Se (MidB < 0) ou (MidB > GapBars) entao MidE := MidE + 1;
       MidB := 0;
-    end
-    else if MidB >= 0 then begin
+    fim
+    senao Se MidB >= 0 entao inicio
       MidB := MidB + 1;
-      if MidB > ResetGap then begin MidE := 0; MidB := -1; end;
-    end;
+      Se MidB > ResetGap entao inicio MidE := 0; MidB := -1; fim;
+    fim;
 
-    // U0
-    Tol := U0 * TolPct / 100.0;
-    if ((Low - Tol) <= U0) and (U0 <= (High + Tol)) then begin
-      if (U0b < 0) or (U0b > GapBars) then U0e := U0e + 1;
-      U0b := 0;
-    end else if U0b >= 0 then begin
-      U0b := U0b + 1;
-      if U0b > ResetGap then begin U0e := 0; U0b := -1; end;
-    end;
-
-    // U50
-    Tol := U50 * TolPct / 100.0;
-    if ((Low - Tol) <= U50) and (U50 <= (High + Tol)) then begin
-      if (U50b < 0) or (U50b > GapBars) then U50e := U50e + 1;
-      U50b := 0;
-    end else if U50b >= 0 then begin
-      U50b := U50b + 1;
-      if U50b > ResetGap then begin U50e := 0; U50b := -1; end;
-    end;
-
-    // U100
-    Tol := U100 * TolPct / 100.0;
-    if ((Low - Tol) <= U100) and (U100 <= (High + Tol)) then begin
-      if (U100b < 0) or (U100b > GapBars) then U100e := U100e + 1;
-      U100b := 0;
-    end else if U100b >= 0 then begin
-      U100b := U100b + 1;
-      if U100b > ResetGap then begin U100e := 0; U100b := -1; end;
-    end;
-
-    // U150
-    Tol := U150 * TolPct / 100.0;
-    if ((Low - Tol) <= U150) and (U150 <= (High + Tol)) then begin
-      if (U150b < 0) or (U150b > GapBars) then U150e := U150e + 1;
-      U150b := 0;
-    end else if U150b >= 0 then begin
-      U150b := U150b + 1;
-      if U150b > ResetGap then begin U150e := 0; U150b := -1; end;
-    end;
-
-    // U200
-    Tol := U200 * TolPct / 100.0;
-    if ((Low - Tol) <= U200) and (U200 <= (High + Tol)) then begin
-      if (U200b < 0) or (U200b > GapBars) then U200e := U200e + 1;
-      U200b := 0;
-    end else if U200b >= 0 then begin
-      U200b := U200b + 1;
-      if U200b > ResetGap then begin U200e := 0; U200b := -1; end;
-    end;
-
-    // U250
-    Tol := U250 * TolPct / 100.0;
-    if ((Low - Tol) <= U250) and (U250 <= (High + Tol)) then begin
-      if (U250b < 0) or (U250b > GapBars) then U250e := U250e + 1;
-      U250b := 0;
-    end else if U250b >= 0 then begin
-      U250b := U250b + 1;
-      if U250b > ResetGap then begin U250e := 0; U250b := -1; end;
-    end;
-
-    // U300
-    Tol := U300 * TolPct / 100.0;
-    if ((Low - Tol) <= U300) and (U300 <= (High + Tol)) then begin
-      if (U300b < 0) or (U300b > GapBars) then U300e := U300e + 1;
-      U300b := 0;
-    end else if U300b >= 0 then begin
-      U300b := U300b + 1;
-      if U300b > ResetGap then begin U300e := 0; U300b := -1; end;
-    end;
-
-    // U350
-    Tol := U350 * TolPct / 100.0;
-    if ((Low - Tol) <= U350) and (U350 <= (High + Tol)) then begin
-      if (U350b < 0) or (U350b > GapBars) then U350e := U350e + 1;
-      U350b := 0;
-    end else if U350b >= 0 then begin
-      U350b := U350b + 1;
-      if U350b > ResetGap then begin U350e := 0; U350b := -1; end;
-    end;
-
-    // U400
-    Tol := U400 * TolPct / 100.0;
-    if ((Low - Tol) <= U400) and (U400 <= (High + Tol)) then begin
-      if (U400b < 0) or (U400b > GapBars) then U400e := U400e + 1;
-      U400b := 0;
-    end else if U400b >= 0 then begin
-      U400b := U400b + 1;
-      if U400b > ResetGap then begin U400e := 0; U400b := -1; end;
-    end;
-
-    // U450
-    Tol := U450 * TolPct / 100.0;
-    if ((Low - Tol) <= U450) and (U450 <= (High + Tol)) then begin
-      if (U450b < 0) or (U450b > GapBars) then U450e := U450e + 1;
-      U450b := 0;
-    end else if U450b >= 0 then begin
-      U450b := U450b + 1;
-      if U450b > ResetGap then begin U450e := 0; U450b := -1; end;
-    end;
-
-    // L0
+    // Suportes (L0..L450)
     Tol := L0 * TolPct / 100.0;
-    if ((Low - Tol) <= L0) and (L0 <= (High + Tol)) then begin
-      if (L0b < 0) or (L0b > GapBars) then L0e := L0e + 1;
+    Se ((Minima - Tol) <= L0) e (L0 <= (Maxima + Tol)) entao inicio
+      Se (L0b < 0) ou (L0b > GapBars) entao L0e := L0e + 1;
       L0b := 0;
-    end else if L0b >= 0 then begin
-      L0b := L0b + 1;
-      if L0b > ResetGap then begin L0e := 0; L0b := -1; end;
-    end;
+    fim senao Se L0b >= 0 entao inicio L0b := L0b + 1; Se L0b > ResetGap entao inicio L0e := 0; L0b := -1; fim; fim;
 
-    // L50
     Tol := L50 * TolPct / 100.0;
-    if ((Low - Tol) <= L50) and (L50 <= (High + Tol)) then begin
-      if (L50b < 0) or (L50b > GapBars) then L50e := L50e + 1;
+    Se ((Minima - Tol) <= L50) e (L50 <= (Maxima + Tol)) entao inicio
+      Se (L50b < 0) ou (L50b > GapBars) entao L50e := L50e + 1;
       L50b := 0;
-    end else if L50b >= 0 then begin
-      L50b := L50b + 1;
-      if L50b > ResetGap then begin L50e := 0; L50b := -1; end;
-    end;
+    fim senao Se L50b >= 0 entao inicio L50b := L50b + 1; Se L50b > ResetGap entao inicio L50e := 0; L50b := -1; fim; fim;
 
-    // L100
     Tol := L100 * TolPct / 100.0;
-    if ((Low - Tol) <= L100) and (L100 <= (High + Tol)) then begin
-      if (L100b < 0) or (L100b > GapBars) then L100e := L100e + 1;
+    Se ((Minima - Tol) <= L100) e (L100 <= (Maxima + Tol)) entao inicio
+      Se (L100b < 0) ou (L100b > GapBars) entao L100e := L100e + 1;
       L100b := 0;
-    end else if L100b >= 0 then begin
-      L100b := L100b + 1;
-      if L100b > ResetGap then begin L100e := 0; L100b := -1; end;
-    end;
+    fim senao Se L100b >= 0 entao inicio L100b := L100b + 1; Se L100b > ResetGap entao inicio L100e := 0; L100b := -1; fim; fim;
 
-    // L150
     Tol := L150 * TolPct / 100.0;
-    if ((Low - Tol) <= L150) and (L150 <= (High + Tol)) then begin
-      if (L150b < 0) or (L150b > GapBars) then L150e := L150e + 1;
+    Se ((Minima - Tol) <= L150) e (L150 <= (Maxima + Tol)) entao inicio
+      Se (L150b < 0) ou (L150b > GapBars) entao L150e := L150e + 1;
       L150b := 0;
-    end else if L150b >= 0 then begin
-      L150b := L150b + 1;
-      if L150b > ResetGap then begin L150e := 0; L150b := -1; end;
-    end;
+    fim senao Se L150b >= 0 entao inicio L150b := L150b + 1; Se L150b > ResetGap entao inicio L150e := 0; L150b := -1; fim; fim;
 
-    // L200
     Tol := L200 * TolPct / 100.0;
-    if ((Low - Tol) <= L200) and (L200 <= (High + Tol)) then begin
-      if (L200b < 0) or (L200b > GapBars) then L200e := L200e + 1;
+    Se ((Minima - Tol) <= L200) e (L200 <= (Maxima + Tol)) entao inicio
+      Se (L200b < 0) ou (L200b > GapBars) entao L200e := L200e + 1;
       L200b := 0;
-    end else if L200b >= 0 then begin
-      L200b := L200b + 1;
-      if L200b > ResetGap then begin L200e := 0; L200b := -1; end;
-    end;
+    fim senao Se L200b >= 0 entao inicio L200b := L200b + 1; Se L200b > ResetGap entao inicio L200e := 0; L200b := -1; fim; fim;
 
-    // L250
     Tol := L250 * TolPct / 100.0;
-    if ((Low - Tol) <= L250) and (L250 <= (High + Tol)) then begin
-      if (L250b < 0) or (L250b > GapBars) then L250e := L250e + 1;
+    Se ((Minima - Tol) <= L250) e (L250 <= (Maxima + Tol)) entao inicio
+      Se (L250b < 0) ou (L250b > GapBars) entao L250e := L250e + 1;
       L250b := 0;
-    end else if L250b >= 0 then begin
-      L250b := L250b + 1;
-      if L250b > ResetGap then begin L250e := 0; L250b := -1; end;
-    end;
+    fim senao Se L250b >= 0 entao inicio L250b := L250b + 1; Se L250b > ResetGap entao inicio L250e := 0; L250b := -1; fim; fim;
 
-    // L300
     Tol := L300 * TolPct / 100.0;
-    if ((Low - Tol) <= L300) and (L300 <= (High + Tol)) then begin
-      if (L300b < 0) or (L300b > GapBars) then L300e := L300e + 1;
+    Se ((Minima - Tol) <= L300) e (L300 <= (Maxima + Tol)) entao inicio
+      Se (L300b < 0) ou (L300b > GapBars) entao L300e := L300e + 1;
       L300b := 0;
-    end else if L300b >= 0 then begin
-      L300b := L300b + 1;
-      if L300b > ResetGap then begin L300e := 0; L300b := -1; end;
-    end;
+    fim senao Se L300b >= 0 entao inicio L300b := L300b + 1; Se L300b > ResetGap entao inicio L300e := 0; L300b := -1; fim; fim;
 
-    // L350
     Tol := L350 * TolPct / 100.0;
-    if ((Low - Tol) <= L350) and (L350 <= (High + Tol)) then begin
-      if (L350b < 0) or (L350b > GapBars) then L350e := L350e + 1;
+    Se ((Minima - Tol) <= L350) e (L350 <= (Maxima + Tol)) entao inicio
+      Se (L350b < 0) ou (L350b > GapBars) entao L350e := L350e + 1;
       L350b := 0;
-    end else if L350b >= 0 then begin
-      L350b := L350b + 1;
-      if L350b > ResetGap then begin L350e := 0; L350b := -1; end;
-    end;
+    fim senao Se L350b >= 0 entao inicio L350b := L350b + 1; Se L350b > ResetGap entao inicio L350e := 0; L350b := -1; fim; fim;
 
-    // L400
     Tol := L400 * TolPct / 100.0;
-    if ((Low - Tol) <= L400) and (L400 <= (High + Tol)) then begin
-      if (L400b < 0) or (L400b > GapBars) then L400e := L400e + 1;
+    Se ((Minima - Tol) <= L400) e (L400 <= (Maxima + Tol)) entao inicio
+      Se (L400b < 0) ou (L400b > GapBars) entao L400e := L400e + 1;
       L400b := 0;
-    end else if L400b >= 0 then begin
-      L400b := L400b + 1;
-      if L400b > ResetGap then begin L400e := 0; L400b := -1; end;
-    end;
+    fim senao Se L400b >= 0 entao inicio L400b := L400b + 1; Se L400b > ResetGap entao inicio L400e := 0; L400b := -1; fim; fim;
 
-    // L450
     Tol := L450 * TolPct / 100.0;
-    if ((Low - Tol) <= L450) and (L450 <= (High + Tol)) then begin
-      if (L450b < 0) or (L450b > GapBars) then L450e := L450e + 1;
+    Se ((Minima - Tol) <= L450) e (L450 <= (Maxima + Tol)) entao inicio
+      Se (L450b < 0) ou (L450b > GapBars) entao L450e := L450e + 1;
       L450b := 0;
-    end else if L450b >= 0 then begin
-      L450b := L450b + 1;
-      if L450b > ResetGap then begin L450e := 0; L450b := -1; end;
-    end;
-  end;
+    fim senao Se L450b >= 0 entao inicio L450b := L450b + 1; Se L450b > ResetGap entao inicio L450e := 0; L450b := -1; fim; fim;
 
-  //----------------------------------------------------------------------------
-  // INDICADORES (Estoc + TRIX + ADX/DiPDiM no proprio 5m)
-  //----------------------------------------------------------------------------
-  StochK := FastStochastic(EstocLen);
-  StochD := Media(EstocDLen, StochK);
+    // Resistencias (U0..U450)
+    Tol := U0 * TolPct / 100.0;
+    Se ((Minima - Tol) <= U0) e (U0 <= (Maxima + Tol)) entao inicio
+      Se (U0b < 0) ou (U0b > GapBars) entao U0e := U0e + 1;
+      U0b := 0;
+    fim senao Se U0b >= 0 entao inicio U0b := U0b + 1; Se U0b > ResetGap entao inicio U0e := 0; U0b := -1; fim; fim;
 
-  // barssince de cada cruzamento (proxy manual via contador incremental)
-  if (StochK[1] <= StochD[1]) and (StochK > StochD) then StochBarsUp := 0
-  else StochBarsUp := StochBarsUp + 1;
+    Tol := U50 * TolPct / 100.0;
+    Se ((Minima - Tol) <= U50) e (U50 <= (Maxima + Tol)) entao inicio
+      Se (U50b < 0) ou (U50b > GapBars) entao U50e := U50e + 1;
+      U50b := 0;
+    fim senao Se U50b >= 0 entao inicio U50b := U50b + 1; Se U50b > ResetGap entao inicio U50e := 0; U50b := -1; fim; fim;
 
-  if (StochK[1] >= StochD[1]) and (StochK < StochD) then StochBarsDn := 0
-  else StochBarsDn := StochBarsDn + 1;
+    Tol := U100 * TolPct / 100.0;
+    Se ((Minima - Tol) <= U100) e (U100 <= (Maxima + Tol)) entao inicio
+      Se (U100b < 0) ou (U100b > GapBars) entao U100e := U100e + 1;
+      U100b := 0;
+    fim senao Se U100b >= 0 entao inicio U100b := U100b + 1; Se U100b > ResetGap entao inicio U100e := 0; U100b := -1; fim; fim;
 
-  // TRIX manual: EMA tripla + ROC
-  Ema1    := MediaExp(TrixLen, Close);
-  Ema2    := MediaExp(TrixLen, Ema1);
-  Ema3    := MediaExp(TrixLen, Ema2);
-  TrixVal := (Ema3 - Ema3[1]) / Ema3[1] * 100;
+    Tol := U150 * TolPct / 100.0;
+    Se ((Minima - Tol) <= U150) e (U150 <= (Maxima + Tol)) entao inicio
+      Se (U150b < 0) ou (U150b > GapBars) entao U150e := U150e + 1;
+      U150b := 0;
+    fim senao Se U150b >= 0 entao inicio U150b := U150b + 1; Se U150b > ResetGap entao inicio U150e := 0; U150b := -1; fim; fim;
+
+    Tol := U200 * TolPct / 100.0;
+    Se ((Minima - Tol) <= U200) e (U200 <= (Maxima + Tol)) entao inicio
+      Se (U200b < 0) ou (U200b > GapBars) entao U200e := U200e + 1;
+      U200b := 0;
+    fim senao Se U200b >= 0 entao inicio U200b := U200b + 1; Se U200b > ResetGap entao inicio U200e := 0; U200b := -1; fim; fim;
+
+    Tol := U250 * TolPct / 100.0;
+    Se ((Minima - Tol) <= U250) e (U250 <= (Maxima + Tol)) entao inicio
+      Se (U250b < 0) ou (U250b > GapBars) entao U250e := U250e + 1;
+      U250b := 0;
+    fim senao Se U250b >= 0 entao inicio U250b := U250b + 1; Se U250b > ResetGap entao inicio U250e := 0; U250b := -1; fim; fim;
+
+    Tol := U300 * TolPct / 100.0;
+    Se ((Minima - Tol) <= U300) e (U300 <= (Maxima + Tol)) entao inicio
+      Se (U300b < 0) ou (U300b > GapBars) entao U300e := U300e + 1;
+      U300b := 0;
+    fim senao Se U300b >= 0 entao inicio U300b := U300b + 1; Se U300b > ResetGap entao inicio U300e := 0; U300b := -1; fim; fim;
+
+    Tol := U350 * TolPct / 100.0;
+    Se ((Minima - Tol) <= U350) e (U350 <= (Maxima + Tol)) entao inicio
+      Se (U350b < 0) ou (U350b > GapBars) entao U350e := U350e + 1;
+      U350b := 0;
+    fim senao Se U350b >= 0 entao inicio U350b := U350b + 1; Se U350b > ResetGap entao inicio U350e := 0; U350b := -1; fim; fim;
+
+    Tol := U400 * TolPct / 100.0;
+    Se ((Minima - Tol) <= U400) e (U400 <= (Maxima + Tol)) entao inicio
+      Se (U400b < 0) ou (U400b > GapBars) entao U400e := U400e + 1;
+      U400b := 0;
+    fim senao Se U400b >= 0 entao inicio U400b := U400b + 1; Se U400b > ResetGap entao inicio U400e := 0; U400b := -1; fim; fim;
+
+    Tol := U450 * TolPct / 100.0;
+    Se ((Minima - Tol) <= U450) e (U450 <= (Maxima + Tol)) entao inicio
+      Se (U450b < 0) ou (U450b > GapBars) entao U450e := U450e + 1;
+      U450b := 0;
+    fim senao Se U450b >= 0 entao inicio U450b := U450b + 1; Se U450b > ResetGap entao inicio U450e := 0; U450b := -1; fim; fim;
+  fim;
+
+  //--------------------------------------------------------------------------
+  // Indicadores no TF do grafico (5min)
+  //--------------------------------------------------------------------------
+  // Estocastico LENTO (K=8, D=3, SMA duplo)
+  StochRaw := FastStochastic(EstocLen);
+  StochK   := Media(EstocDLen, StochRaw);
+  StochD   := Media(EstocDLen, StochK);
+  StochBuy  := StochK > StochD;
+  StochSell := StochK < StochD;
+
+  // TRIX (9, MMA 3)
+  TrixVal := (MediaExp(TrixLen, MediaExp(TrixLen, MediaExp(TrixLen, Close))) -
+              MediaExp(TrixLen, MediaExp(TrixLen, MediaExp(TrixLen, Close)))[1]) /
+             MediaExp(TrixLen, MediaExp(TrixLen, MediaExp(TrixLen, Close)))[1] * 100;
   TrixMA  := Media(TrixMALen, TrixVal);
+  TrixBuy  := TrixVal > TrixMA;
+  TrixSell := TrixVal < TrixMA;
 
-  if (TrixVal[1] <= TrixMA[1]) and (TrixVal > TrixMA) then begin
-    TrixBarsUp    := 0;
-    Trix1mCrossUp := True;
-  end else begin
-    TrixBarsUp    := TrixBarsUp + 1;
-    Trix1mCrossUp := False;
-  end;
+  // DI+/DI- e ADX (8, 8)
+  AdxV := ADX(AdxLen, AdxMediaLen);
+  DmP  := DiPDiM(AdxLen)|0|;
+  DmN  := DiPDiM(AdxLen)|1|;
+  DmiBuy  := DmP > DmN;
+  DmiSell := DmN > DmP;
 
-  if (TrixVal[1] >= TrixMA[1]) and (TrixVal < TrixMA) then begin
-    TrixBarsDn    := 0;
-    Trix1mCrossDn := True;
-  end else begin
-    TrixBarsDn    := TrixBarsDn + 1;
-    Trix1mCrossDn := False;
-  end;
+  Score3Buy  := 0;
+  Score3Sell := 0;
+  Se StochBuy  entao Score3Buy  := Score3Buy  + 1;
+  Se TrixBuy   entao Score3Buy  := Score3Buy  + 1;
+  Se DmiBuy    entao Score3Buy  := Score3Buy  + 1;
+  Se StochSell entao Score3Sell := Score3Sell + 1;
+  Se TrixSell  entao Score3Sell := Score3Sell + 1;
+  Se DmiSell   entao Score3Sell := Score3Sell + 1;
 
-  // ADX/DiPDiM multi-periodo (aproxima HTF)
-  AdxV  := ADX(AdxLenBase, AdxMediaLen);
-  DmP   := DiPDiM(AdxLenBase)|0|;
-  DmN   := DiPDiM(AdxLenBase)|1|;
+  Tf5Aligned3Buy  := (Score3Buy  = 3);
+  Tf5Aligned3Sell := (Score3Sell = 3);
 
-  Adx15 := ADX(AdxLenH15, AdxMediaLen);
-  DmP15 := DiPDiM(AdxLenH15)|0|;
-  DmN15 := DiPDiM(AdxLenH15)|1|;
+  //--------------------------------------------------------------------------
+  // Congruencia aproximada 15/30/60m via DMI com periodos dilatados no 5m
+  // (NTSL nao tem MTF nativo; usa ADX(24), ADX(48), ADX(96) como proxies)
+  //--------------------------------------------------------------------------
+  AdxV15 := ADX(AdxLen * 3, AdxMediaLen);
+  DmP15  := DiPDiM(AdxLen * 3)|0|;
+  DmN15  := DiPDiM(AdxLen * 3)|1|;
+  AdxV30 := ADX(AdxLen * 6, AdxMediaLen);
+  DmP30  := DiPDiM(AdxLen * 6)|0|;
+  DmN30  := DiPDiM(AdxLen * 6)|1|;
+  AdxV60 := ADX(AdxLen * 12, AdxMediaLen);
+  DmP60  := DiPDiM(AdxLen * 12)|0|;
+  DmN60  := DiPDiM(AdxLen * 12)|1|;
 
-  Adx30 := ADX(AdxLenH30, AdxMediaLen);
-  DmP30 := DiPDiM(AdxLenH30)|0|;
-  DmN30 := DiPDiM(AdxLenH30)|1|;
+  Tf15Buy := (AdxV15 > 25) e (DmP15 > DmN15);
+  Tf30Buy := (AdxV30 > 25) e (DmP30 > DmN30);
+  Tf60Buy := (AdxV60 > 25) e (DmP60 > DmN60);
+  Tf15Sell := (AdxV15 > 25) e (DmN15 > DmP15);
+  Tf30Sell := (AdxV30 > 25) e (DmN30 > DmP30);
+  Tf60Sell := (AdxV60 > 25) e (DmN60 > DmP60);
 
-  Adx60 := ADX(AdxLenH60, AdxMediaLen);
-  DmP60 := DiPDiM(AdxLenH60)|0|;
-  DmN60 := DiPDiM(AdxLenH60)|1|;
+  NTfsBuy := 0;
+  Se Tf5Aligned3Buy entao NTfsBuy := NTfsBuy + 1;
+  Se Tf15Buy        entao NTfsBuy := NTfsBuy + 1;
+  Se Tf30Buy        entao NTfsBuy := NTfsBuy + 1;
+  Se Tf60Buy        entao NTfsBuy := NTfsBuy + 1;
 
-  //----------------------------------------------------------------------------
-  // CONGRUENCIA MTF (aproximada)
-  //----------------------------------------------------------------------------
-  Cong5Buy   := (AdxV  > AdxMin) and (DmP  > DmN);
-  Cong15Buy  := (Adx15 > AdxMin) and (DmP15 > DmN15);
-  Cong30Buy  := (Adx30 > AdxMin) and (DmP30 > DmN30);
-  Cong60Buy  := (Adx60 > AdxMin) and (DmP60 > DmN60);
+  NTfsSell := 0;
+  Se Tf5Aligned3Sell entao NTfsSell := NTfsSell + 1;
+  Se Tf15Sell        entao NTfsSell := NTfsSell + 1;
+  Se Tf30Sell        entao NTfsSell := NTfsSell + 1;
+  Se Tf60Sell        entao NTfsSell := NTfsSell + 1;
 
-  Cong5Sell  := (AdxV  > AdxMin) and (DmN  > DmP);
-  Cong15Sell := (Adx15 > AdxMin) and (DmN15 > DmP15);
-  Cong30Sell := (Adx30 > AdxMin) and (DmN30 > DmP30);
-  Cong60Sell := (Adx60 > AdxMin) and (DmN60 > DmP60);
+  //--------------------------------------------------------------------------
+  // Gate v14: 2a batida em Fibo + candle fecha na direcao
+  //--------------------------------------------------------------------------
+  BuyGateArmed := False;
+  SellGateArmed := False;
 
-  Cong44BuyScore  := 0;
-  Cong44SellScore := 0;
-  if Cong5Buy  then Cong44BuyScore  := Cong44BuyScore  + 1;
-  if Cong15Buy then Cong44BuyScore  := Cong44BuyScore  + 1;
-  if Cong30Buy then Cong44BuyScore  := Cong44BuyScore  + 1;
-  if Cong60Buy then Cong44BuyScore  := Cong44BuyScore  + 1;
-  if Cong5Sell  then Cong44SellScore := Cong44SellScore + 1;
-  if Cong15Sell then Cong44SellScore := Cong44SellScore + 1;
-  if Cong30Sell then Cong44SellScore := Cong44SellScore + 1;
-  if Cong60Sell then Cong44SellScore := Cong44SellScore + 1;
+  Se HasBase entao inicio
+    // Compra: 2a batida em suporte E fecha ACIMA
+    Se ((MidE = 2) e (Fechamento > UMid))   entao BuyGateArmed := True;
+    Se ((L0e = 2) e (Fechamento > L0))       entao BuyGateArmed := True;
+    Se ((L50e = 2) e (Fechamento > L50))     entao BuyGateArmed := True;
+    Se ((L100e = 2) e (Fechamento > L100))   entao BuyGateArmed := True;
+    Se ((L150e = 2) e (Fechamento > L150))   entao BuyGateArmed := True;
+    Se ((L200e = 2) e (Fechamento > L200))   entao BuyGateArmed := True;
+    Se ((L250e = 2) e (Fechamento > L250))   entao BuyGateArmed := True;
+    Se ((L300e = 2) e (Fechamento > L300))   entao BuyGateArmed := True;
+    Se ((L350e = 2) e (Fechamento > L350))   entao BuyGateArmed := True;
+    Se ((L400e = 2) e (Fechamento > L400))   entao BuyGateArmed := True;
+    Se ((L450e = 2) e (Fechamento > L450))   entao BuyGateArmed := True;
 
-  // Score direcional pra anti-faca (Estoc + TRIX + DiPDiM, cada TF)
-  Score15Buy  := 0; Score15Sell := 0;
-  Score30Buy  := 0; Score30Sell := 0;
-  Score60Buy  := 0; Score60Sell := 0;
+    // Venda: 2a batida em resistencia E fecha ABAIXO
+    Se ((MidE = 2) e (Fechamento < UMid))    entao SellGateArmed := True;
+    Se ((U0e = 2) e (Fechamento < U0))        entao SellGateArmed := True;
+    Se ((U50e = 2) e (Fechamento < U50))      entao SellGateArmed := True;
+    Se ((U100e = 2) e (Fechamento < U100))    entao SellGateArmed := True;
+    Se ((U150e = 2) e (Fechamento < U150))    entao SellGateArmed := True;
+    Se ((U200e = 2) e (Fechamento < U200))    entao SellGateArmed := True;
+    Se ((U250e = 2) e (Fechamento < U250))    entao SellGateArmed := True;
+    Se ((U300e = 2) e (Fechamento < U300))    entao SellGateArmed := True;
+    Se ((U350e = 2) e (Fechamento < U350))    entao SellGateArmed := True;
+    Se ((U400e = 2) e (Fechamento < U400))    entao SellGateArmed := True;
+    Se ((U450e = 2) e (Fechamento < U450))    entao SellGateArmed := True;
+  fim;
 
-  if StochK > StochD then Score15Buy  := Score15Buy  + 1 else Score15Sell := Score15Sell + 1;
-  if TrixVal > TrixMA then Score15Buy  := Score15Buy  + 1 else Score15Sell := Score15Sell + 1;
-  if DmP15 > DmN15    then Score15Buy  := Score15Buy  + 1 else Score15Sell := Score15Sell + 1;
+  // Sinal dispara no candle SEGUINTE ao armed (entra na abertura)
+  BuySignalV14  := BuyGateArmed[1];
+  SellSignalV14 := SellGateArmed[1];
 
-  if StochK > StochD  then Score30Buy  := Score30Buy  + 1 else Score30Sell := Score30Sell + 1;
-  if TrixVal > TrixMA then Score30Buy  := Score30Buy  + 1 else Score30Sell := Score30Sell + 1;
-  if DmP30 > DmN30    then Score30Buy  := Score30Buy  + 1 else Score30Sell := Score30Sell + 1;
-
-  if StochK > StochD  then Score60Buy  := Score60Buy  + 1 else Score60Sell := Score60Sell + 1;
-  if TrixVal > TrixMA then Score60Buy  := Score60Buy  + 1 else Score60Sell := Score60Sell + 1;
-  if DmP60 > DmN60    then Score60Buy  := Score60Buy  + 1 else Score60Sell := Score60Sell + 1;
-
-  //----------------------------------------------------------------------------
-  // GATILHO 2o TOQUE
-  //----------------------------------------------------------------------------
-  BuyFirstAgo   := BuyFirstAgo   + 1;
-  BuySecondAgo  := BuySecondAgo  + 1;
-  SellFirstAgo  := SellFirstAgo  + 1;
-  SellSecondAgo := SellSecondAgo + 1;
-
-  // 1o toque (== 1) em qualquer suporte -> arma BUY
-  if HasBase and (BuyFirstAgo > MaxGapTouches) and (
-       ((MidE = 1) and (MidB = 0)) or
-       ((L0e = 1) and (L0b = 0)) or ((L50e = 1) and (L50b = 0)) or
-       ((L100e = 1) and (L100b = 0)) or ((L150e = 1) and (L150b = 0)) or
-       ((L200e = 1) and (L200b = 0)) or ((L250e = 1) and (L250b = 0)) or
-       ((L300e = 1) and (L300b = 0)) or ((L350e = 1) and (L350b = 0)) or
-       ((L400e = 1) and (L400b = 0)) or ((L450e = 1) and (L450b = 0)) ) then begin
-    BuyFirstAgo  := 0;
-    BuySecondAgo := 999999;
-  end;
-
-  // 1o toque em qualquer resistencia -> arma SELL
-  if HasBase and (SellFirstAgo > MaxGapTouches) and (
-       ((MidE = 1) and (MidB = 0)) or
-       ((U0e = 1) and (U0b = 0)) or ((U50e = 1) and (U50b = 0)) or
-       ((U100e = 1) and (U100b = 0)) or ((U150e = 1) and (U150b = 0)) or
-       ((U200e = 1) and (U200b = 0)) or ((U250e = 1) and (U250b = 0)) or
-       ((U300e = 1) and (U300b = 0)) or ((U350e = 1) and (U350b = 0)) or
-       ((U400e = 1) and (U400b = 0)) or ((U450e = 1) and (U450b = 0)) ) then begin
-    SellFirstAgo  := 0;
-    SellSecondAgo := 999999;
-  end;
-
-  // 2o toque
-  if HasBase and (BuyFirstAgo <= MaxGapTouches) and (BuySecondAgo > WaitAfterTouch) and (
-       ((MidE = 2) and (MidB = 0)) or
-       ((L0e = 2) and (L0b = 0)) or ((L50e = 2) and (L50b = 0)) or
-       ((L100e = 2) and (L100b = 0)) or ((L150e = 2) and (L150b = 0)) or
-       ((L200e = 2) and (L200b = 0)) or ((L250e = 2) and (L250b = 0)) or
-       ((L300e = 2) and (L300b = 0)) or ((L350e = 2) and (L350b = 0)) or
-       ((L400e = 2) and (L400b = 0)) or ((L450e = 2) and (L450b = 0)) ) then
-    BuySecondAgo := 0;
-
-  if HasBase and (SellFirstAgo <= MaxGapTouches) and (SellSecondAgo > WaitAfterTouch) and (
-       ((MidE = 2) and (MidB = 0)) or
-       ((U0e = 2) and (U0b = 0)) or ((U50e = 2) and (U50b = 0)) or
-       ((U100e = 2) and (U100b = 0)) or ((U150e = 2) and (U150b = 0)) or
-       ((U200e = 2) and (U200b = 0)) or ((U250e = 2) and (U250b = 0)) or
-       ((U300e = 2) and (U300b = 0)) or ((U350e = 2) and (U350b = 0)) or
-       ((U400e = 2) and (U400b = 0)) or ((U450e = 2) and (U450b = 0)) ) then
-    SellSecondAgo := 0;
-
-  BuyTouchOpen  := (BuySecondAgo  <= WaitAfterTouch);
-  SellTouchOpen := (SellSecondAgo <= WaitAfterTouch);
-
-  BuyStochValid  := BuyTouchOpen  and (StochBarsUp < BuyFirstAgo);
-  BuyTrixValid   := BuyTouchOpen  and (TrixBarsUp  < BuyFirstAgo);
-  SellStochValid := SellTouchOpen and (StochBarsDn < SellFirstAgo);
-  SellTrixValid  := SellTouchOpen and (TrixBarsDn  < SellFirstAgo);
-
-  BuyExtras  := 0;
-  SellExtras := 0;
-  if BuyStochValid  then BuyExtras  := BuyExtras  + 1;
-  if BuyTrixValid   then BuyExtras  := BuyExtras  + 1;
-  if SellStochValid then SellExtras := SellExtras + 1;
-  if SellTrixValid  then SellExtras := SellExtras + 1;
-
-  // Anti-faca: bloqueia se HTF em 3/3 contra
-  AntiFacaBuyOk  := (AntiFaca = 0) or ((Score15Sell < 3) and (Score30Sell < 3) and (Score60Sell < 3));
-  AntiFacaSellOk := (AntiFaca = 0) or ((Score15Buy  < 3) and (Score30Buy  < 3) and (Score60Buy  < 3));
-
-  BuySignalHit  := BuyTouchOpen  and (BuyExtras  >= MinExtras) and AntiFacaBuyOk;
-  SellSignalHit := SellTouchOpen and (SellExtras >= MinExtras) and AntiFacaSellOk;
-
-  //----------------------------------------------------------------------------
-  // SESSAO (Time no formato HHMM)
-  //----------------------------------------------------------------------------
-  InEntryWindow := (Time < SessionEndTime);
+  //--------------------------------------------------------------------------
+  // Sessao
+  //--------------------------------------------------------------------------
+  InEntryWindow := (Time < SessionEnd);
   InEodWindow   := (Time >= EodTime);
 
-  //----------------------------------------------------------------------------
-  // ENTRADAS (scale-out reduzido pra 3 alvos: 150 / 300 / 450)
-  // Profit NTSL abre a posicao total num BuyAtMarket(qty) e sai por partes com
-  // SellToCoverLimit(preco, qty). Stop protetor via SellToCoverStop.
-  //----------------------------------------------------------------------------
-  if BuySignalHit and InEntryWindow and (not HasPosition) and HasBase then begin
-    QtyTotal := QtyBase * Cong44BuyScore;
-    if QtyTotal < QtyBase then QtyTotal := QtyBase;
-    if QtyTotal > QtyCap  then QtyTotal := QtyCap;
-    Qty1 := IntPortion(QtyTotal / 3);
-    if Qty1 < 1 then Qty1 := 1;
-    Qty2 := Qty1;
-    Qty3 := QtyTotal - Qty1 - Qty2;
-    if Qty3 < 1 then Qty3 := 1;
+  //--------------------------------------------------------------------------
+  // Entradas (NTSL: BuyAtMarket abre posicao total; scale-out por SellToCoverLimit)
+  //--------------------------------------------------------------------------
+  Se BuySignalV14 e InEntryWindow e (BuyPosition = 0) e (SellPosition = 0) e HasBase entao
+  inicio
+    QtyTotal := QtyBase * NTfsBuy;
+    Se QtyTotal < QtyBase entao QtyTotal := QtyBase;
+    Se QtyTotal > QtyCap  entao QtyTotal := QtyCap;
+    Qty1 := IntPortion(QtyTotal / 2);
+    Se Qty1 < 1 entao Qty1 := 1;
+    Qty2 := QtyTotal - Qty1;
+    Se Qty2 < 1 entao Qty2 := 1;
 
     BuyAtMarket(QtyTotal);
     StopPrice := Close - FibRange * StopFibPct;
+    AlvoC1 := U150;
+    AlvoC2 := U300;
     SellToCoverStop(StopPrice, StopPrice, QtyTotal);
-    SellToCoverLimit(U150, Qty1);
-    SellToCoverLimit(U300, Qty2);
-    SellToCoverLimit(U450, Qty3);
-  end;
+    SellToCoverLimit(AlvoC1, Qty1);
+    SellToCoverLimit(AlvoC2, Qty2);
+  fim;
 
-  if SellSignalHit and InEntryWindow and (not HasPosition) and HasBase then begin
-    QtyTotal := QtyBase * Cong44SellScore;
-    if QtyTotal < QtyBase then QtyTotal := QtyBase;
-    if QtyTotal > QtyCap  then QtyTotal := QtyCap;
-    Qty1 := IntPortion(QtyTotal / 3);
-    if Qty1 < 1 then Qty1 := 1;
-    Qty2 := Qty1;
-    Qty3 := QtyTotal - Qty1 - Qty2;
-    if Qty3 < 1 then Qty3 := 1;
+  Se SellSignalV14 e InEntryWindow e (BuyPosition = 0) e (SellPosition = 0) e HasBase entao
+  inicio
+    QtyTotal := QtyBase * NTfsSell;
+    Se QtyTotal < QtyBase entao QtyTotal := QtyBase;
+    Se QtyTotal > QtyCap  entao QtyTotal := QtyCap;
+    Qty1 := IntPortion(QtyTotal / 2);
+    Se Qty1 < 1 entao Qty1 := 1;
+    Qty2 := QtyTotal - Qty1;
+    Se Qty2 < 1 entao Qty2 := 1;
 
     SellShortAtMarket(QtyTotal);
     StopPrice := Close + FibRange * StopFibPct;
+    AlvoV1 := L150;
+    AlvoV2 := L300;
     BuyToCoverStop(StopPrice, StopPrice, QtyTotal);
-    BuyToCoverLimit(L150, Qty1);
-    BuyToCoverLimit(L300, Qty2);
-    BuyToCoverLimit(L450, Qty3);
-  end;
+    BuyToCoverLimit(AlvoV1, Qty1);
+    BuyToCoverLimit(AlvoV2, Qty2);
+  fim;
 
-  //----------------------------------------------------------------------------
-  // SAIDA ANTECIPADA - 2 FASES
-  // Fase 1 (arma): 2o cruzamento TRIX contra o trade
-  // Fase 2 (dispara): armado + toque em qualquer Fibo
-  //----------------------------------------------------------------------------
-  if not HasPosition then begin
-    LongTrixDnCount  := 0;
-    ShortTrixUpCount := 0;
-    LongExitArmed    := False;
-    ShortExitArmed   := False;
-  end;
+  //--------------------------------------------------------------------------
+  // EOD forcado 17:55
+  //--------------------------------------------------------------------------
+  Se InEodWindow e ((BuyPosition > 0) ou (SellPosition > 0)) entao ClosePosition;
 
-  if IsBought and Trix1mCrossDn then
-    LongTrixDnCount := LongTrixDnCount + 1;
-  if IsSold and Trix1mCrossUp then
-    ShortTrixUpCount := ShortTrixUpCount + 1;
-
-  if IsBought and (LongTrixDnCount >= 2) then LongExitArmed := True;
-  if IsSold    and (ShortTrixUpCount >= 2) then ShortExitArmed := True;
-
-  AnyFiboTouch := False;
-  if HasBase then begin
-    if ((Low <= UMid) and (UMid <= High)) or
-       ((Low <= U0)   and (U0   <= High)) or ((Low <= U50)  and (U50  <= High)) or
-       ((Low <= U100) and (U100 <= High)) or ((Low <= U150) and (U150 <= High)) or
-       ((Low <= U200) and (U200 <= High)) or ((Low <= U250) and (U250 <= High)) or
-       ((Low <= U300) and (U300 <= High)) or ((Low <= U350) and (U350 <= High)) or
-       ((Low <= U400) and (U400 <= High)) or ((Low <= U450) and (U450 <= High)) or
-       ((Low <= L0)   and (L0   <= High)) or ((Low <= L50)  and (L50  <= High)) or
-       ((Low <= L100) and (L100 <= High)) or ((Low <= L150) and (L150 <= High)) or
-       ((Low <= L200) and (L200 <= High)) or ((Low <= L250) and (L250 <= High)) or
-       ((Low <= L300) and (L300 <= High)) or ((Low <= L350) and (L350 <= High)) or
-       ((Low <= L400) and (L400 <= High)) or ((Low <= L450) and (L450 <= High)) then
-      AnyFiboTouch := True;
-  end;
-
-  if LongExitArmed  and AnyFiboTouch and IsBought then ClosePosition;
-  if ShortExitArmed and AnyFiboTouch and IsSold    then ClosePosition;
-
-  //----------------------------------------------------------------------------
-  // EOD forcado
-  //----------------------------------------------------------------------------
-  if InEodWindow and HasPosition then ClosePosition;
-
-  //----------------------------------------------------------------------------
-  // PLOTS (referencia visual dos niveis Fibo principais)
-  //----------------------------------------------------------------------------
+  //--------------------------------------------------------------------------
+  // Plots visuais (referencia dos niveis Fibo principais)
+  //--------------------------------------------------------------------------
   Plot(U0);
   Plot2(UMid);
   Plot3(L0);
   Plot4(U150);
   Plot5(L150);
+
 end;
