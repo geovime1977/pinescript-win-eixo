@@ -1,6 +1,6 @@
 // @version=5
 // -----------------------------------------------------------------------------
-// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.13 — 05/08/2026)
+// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.14 — 05/08/2026)
 // -----------------------------------------------------------------------------
 // APLICAR ESTE INDICADOR NO GRÁFICO DE 1 MINUTO DO ATIVO WIN.
 // Timeframe operacional: 1min | Contexto: 5m + 15m + 30m + 60m
@@ -25,6 +25,9 @@ grpFibo   = "Fibonacci"
 show_fibo = input.bool(true,  "Mostrar níveis Fibo",              group=grpFibo)
 show_all  = input.bool(true,  "Mostrar todos os 20 níveis",        group=grpFibo)
 tol_pct   = input.float(0.05, "Tolerância de toque (%)",           group=grpFibo, minval=0.01, step=0.01)
+color_r0  = input.color(color.new(color.red,   55), "Cor da MÁXIMA (R0 topo 1º 5m)", group=grpFibo, tooltip="Default: vermelho claro (55% transparência). Ajuste como preferir.")
+color_s0  = input.color(color.new(color.green, 55), "Cor da MÍNIMA (S0 base 1º 5m)", group=grpFibo, tooltip="Default: verde claro (55% transparência). Ajuste como preferir.")
+lw_extremo = input.int(2, "Espessura MÁX/MÍN (linewidth)", group=grpFibo, minval=1, maxval=5)
 
 grpSig    = "Sinais"
 cross_win = input.int(3, "Janela de iniciação (candles)",          group=grpSig, minval=1, maxval=10, tooltip="Quantos candles atrás o cruzamento/iniciação de um indicador ainda conta como fresh. 1 = estrito (só cruzou neste candle); 3 = default; 10 = permissivo.")
@@ -54,6 +57,21 @@ gate_mode = input.string("v13_legacy", "Modo do gate", options=["v14_close","v13
 grpPnl     = "Painel"
 show_panel = input.bool(true, "Mostrar painel de sinais",           group=grpPnl)
 panel_pos  = input.string("top_right", "Posição do painel", options=["top_right","top_left","bottom_right","bottom_left"], group=grpPnl)
+
+// ============================== CORES DOS MARCADORES ========================
+// Setas MTF (combos 1.x/2.x/3.x/4.x) e ADX markers (A5/A15/A30/A60) usam a
+// mesma cor por TF. Setas do Trade Blotter (Ev1..Ev10) têm cor por ação.
+// Plot / plotshape (Fibo intermediários, gatilhos, MACD 60m, 4/4 premium)
+// já são editáveis via aba ESTILO das Configurações — não precisa input aqui.
+grpCores    = "🎨 Cores dos Marcadores (setas MTF e Blotter)"
+c_tf_5m     = input.color(color.aqua,   "Cor TF 5m  (combo + A5)",         group=grpCores)
+c_tf_15m    = input.color(color.lime,   "Cor TF 15m (combo + A15)",        group=grpCores)
+c_tf_30m    = input.color(color.orange, "Cor TF 30m (combo + A30)",        group=grpCores)
+c_tf_60m    = input.color(color.purple, "Cor TF 60m (combo + A60)",        group=grpCores)
+c_ev_buy    = input.color(color.blue,   "Cor eventos COMPRA (Blotter Ev)", group=grpCores)
+c_ev_sell   = input.color(color.orange, "Cor eventos VENDA (Blotter Ev)",  group=grpCores)
+c_txt_light = input.color(color.white,  "Cor texto dos labels claros (5m/30m/60m)", group=grpCores, tooltip="Texto branco por padrão. TFs de fundo escuro/vibrante ficam ilegíveis com texto preto.")
+c_txt_dark  = input.color(color.black,  "Cor texto dos labels escuros (15m lime)",   group=grpCores, tooltip="Texto preto para o TF 15m (fundo lime).")
 
 // ============================== HELPERS =====================================
 // TRIX manual (Pine v5 não tem ta.trix nativo confiável em request.security)
@@ -123,7 +141,7 @@ color_res_mid  = color.new(color.red,  0)
 color_extremo  = color.new(color.black, 0)  // extremos R0/S0 do 1º candle 5min
 color_mid_1st  = color.new(color.orange, 0) // meio do 1º candle 5min
 
-plot(show_fibo and has_base ? u0   : na, "★ R0 (topo 1º 5m)", color=color_extremo, linewidth=2)
+plot(show_fibo and has_base ? u0   : na, "★ R0 (topo 1º 5m)", color=color_r0, linewidth=lw_extremo)
 plot(show_fibo and has_base ? umid : na, "★ MID (meio 1º 5m)", color=color_mid_1st, linewidth=2)
 plot(show_fibo and has_base ? u50  : na, "★ R50",    color=color_res_mid, linewidth=2)
 plot(show_fibo and has_base ? u100 : na, "R100",     color=color_res)
@@ -134,7 +152,7 @@ plot(show_fibo and has_base and show_all ? u300 : na, "R300", color=color_res)
 plot(show_fibo and has_base and show_all ? u350 : na, "R350", color=color_res)
 plot(show_fibo and has_base and show_all ? u400 : na, "R400", color=color_res)
 plot(show_fibo and has_base and show_all ? u450 : na, "R450", color=color_res)
-plot(show_fibo and has_base ? l0   : na, "★ S0 (base 1º 5m)", color=color_extremo, linewidth=2)
+plot(show_fibo and has_base ? l0   : na, "★ S0 (base 1º 5m)", color=color_s0, linewidth=lw_extremo)
 plot(show_fibo and has_base ? l50  : na, "★ S50",    color=color_sup_mid, linewidth=2)
 plot(show_fibo and has_base ? l100 : na, "S100",     color=color_sup)
 plot(show_fibo and has_base ? l150 : na, "S150", color=color_sup)
@@ -1081,34 +1099,34 @@ lane_4 = atr_lane * 4.4   // 60m
 // 5m — labels dinâmicos (lane 1)
 if show_5m_cmb and up_5m_buy
     txt = "1." + build_ind_code(s5_stoch_b, s5_trix_b, s5_dmi_b)
-    label.new(bar_index, low - lane_1, txt, style=label.style_label_up, color=color.new(color.aqua, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.price)
+    label.new(bar_index, low - lane_1, txt, style=label.style_label_up, color=c_tf_5m, textcolor=c_txt_light, size=mtf_sz, yloc=yloc.price)
 if show_5m_cmb and up_5m_sell
     txt = "1." + build_ind_code(s5_stoch_s, s5_trix_s, s5_dmi_s)
-    label.new(bar_index, high + lane_1, txt, style=label.style_label_down, color=color.new(color.aqua, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.price)
+    label.new(bar_index, high + lane_1, txt, style=label.style_label_down, color=c_tf_5m, textcolor=c_txt_light, size=mtf_sz, yloc=yloc.price)
 
 // 15m (lane 2)
 if show_15m_cmb and up_15m_buy
     txt = "2." + build_ind_code(s15_stoch_b, s15_trix_b, s15_dmi_b)
-    label.new(bar_index, low - lane_2, txt, style=label.style_label_up, color=color.new(color.lime, 0), textcolor=color.black, size=mtf_sz, yloc=yloc.price)
+    label.new(bar_index, low - lane_2, txt, style=label.style_label_up, color=c_tf_15m, textcolor=c_txt_dark, size=mtf_sz, yloc=yloc.price)
 if show_15m_cmb and up_15m_sell
     txt = "2." + build_ind_code(s15_stoch_s, s15_trix_s, s15_dmi_s)
-    label.new(bar_index, high + lane_2, txt, style=label.style_label_down, color=color.new(color.lime, 0), textcolor=color.black, size=mtf_sz, yloc=yloc.price)
+    label.new(bar_index, high + lane_2, txt, style=label.style_label_down, color=c_tf_15m, textcolor=c_txt_dark, size=mtf_sz, yloc=yloc.price)
 
 // 30m (lane 3)
 if show_30m_cmb and up_30m_buy
     txt = "3." + build_ind_code(s30_stoch_b, s30_trix_b, s30_dmi_b)
-    label.new(bar_index, low - lane_3, txt, style=label.style_label_up, color=color.new(color.orange, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.price)
+    label.new(bar_index, low - lane_3, txt, style=label.style_label_up, color=c_tf_30m, textcolor=c_txt_light, size=mtf_sz, yloc=yloc.price)
 if show_30m_cmb and up_30m_sell
     txt = "3." + build_ind_code(s30_stoch_s, s30_trix_s, s30_dmi_s)
-    label.new(bar_index, high + lane_3, txt, style=label.style_label_down, color=color.new(color.orange, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.price)
+    label.new(bar_index, high + lane_3, txt, style=label.style_label_down, color=c_tf_30m, textcolor=c_txt_light, size=mtf_sz, yloc=yloc.price)
 
 // 60m (lane 4)
 if show_60m_cmb and up_60m_buy
     txt = "4." + build_ind_code(s60_stoch_b, s60_trix_b, s60_dmi_b)
-    label.new(bar_index, low - lane_4, txt, style=label.style_label_up, color=color.new(color.purple, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.price)
+    label.new(bar_index, low - lane_4, txt, style=label.style_label_up, color=c_tf_60m, textcolor=c_txt_light, size=mtf_sz, yloc=yloc.price)
 if show_60m_cmb and up_60m_sell
     txt = "4." + build_ind_code(s60_stoch_s, s60_trix_s, s60_dmi_s)
-    label.new(bar_index, high + lane_4, txt, style=label.style_label_down, color=color.new(color.purple, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.price)
+    label.new(bar_index, high + lane_4, txt, style=label.style_label_down, color=c_tf_60m, textcolor=c_txt_light, size=mtf_sz, yloc=yloc.price)
 
 // ============================== MARCA MACD 60m (CONTEXTO MÉDIO PRAZO) ========
 // Marca compacta "M60" cinza no candle do cruzamento. Não pontua no score.
@@ -1197,21 +1215,21 @@ if barstate.islast and show_adx_cmp
 adx_off = 1  // bars à direita do trigger
 
 if adx_mark_5m_buy
-    label.new(bar_index + adx_off, low  - lane_1, "A5",  style=label.style_label_up,   color=color.new(color.aqua,   0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+    label.new(bar_index + adx_off, low  - lane_1, "A5",  style=label.style_label_up,   color=c_tf_5m,  textcolor=c_txt_light, size=size.tiny, yloc=yloc.price)
 if adx_mark_5m_sell
-    label.new(bar_index + adx_off, high + lane_1, "A5",  style=label.style_label_down, color=color.new(color.aqua,   0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+    label.new(bar_index + adx_off, high + lane_1, "A5",  style=label.style_label_down, color=c_tf_5m,  textcolor=c_txt_light, size=size.tiny, yloc=yloc.price)
 if adx_mark_15m_buy
-    label.new(bar_index + adx_off, low  - lane_2, "A15", style=label.style_label_up,   color=color.new(color.lime,   0), textcolor=color.black, size=size.tiny, yloc=yloc.price)
+    label.new(bar_index + adx_off, low  - lane_2, "A15", style=label.style_label_up,   color=c_tf_15m, textcolor=c_txt_dark,  size=size.tiny, yloc=yloc.price)
 if adx_mark_15m_sell
-    label.new(bar_index + adx_off, high + lane_2, "A15", style=label.style_label_down, color=color.new(color.lime,   0), textcolor=color.black, size=size.tiny, yloc=yloc.price)
+    label.new(bar_index + adx_off, high + lane_2, "A15", style=label.style_label_down, color=c_tf_15m, textcolor=c_txt_dark,  size=size.tiny, yloc=yloc.price)
 if adx_mark_30m_buy
-    label.new(bar_index + adx_off, low  - lane_3, "A30", style=label.style_label_up,   color=color.new(color.orange, 0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+    label.new(bar_index + adx_off, low  - lane_3, "A30", style=label.style_label_up,   color=c_tf_30m, textcolor=c_txt_light, size=size.tiny, yloc=yloc.price)
 if adx_mark_30m_sell
-    label.new(bar_index + adx_off, high + lane_3, "A30", style=label.style_label_down, color=color.new(color.orange, 0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+    label.new(bar_index + adx_off, high + lane_3, "A30", style=label.style_label_down, color=c_tf_30m, textcolor=c_txt_light, size=size.tiny, yloc=yloc.price)
 if adx_mark_60m_buy
-    label.new(bar_index + adx_off, low  - lane_4, "A60", style=label.style_label_up,   color=color.new(color.purple, 0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+    label.new(bar_index + adx_off, low  - lane_4, "A60", style=label.style_label_up,   color=c_tf_60m, textcolor=c_txt_light, size=size.tiny, yloc=yloc.price)
 if adx_mark_60m_sell
-    label.new(bar_index + adx_off, high + lane_4, "A60", style=label.style_label_down, color=color.new(color.purple, 0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+    label.new(bar_index + adx_off, high + lane_4, "A60", style=label.style_label_down, color=c_tf_60m, textcolor=c_txt_light, size=size.tiny, yloc=yloc.price)
 
 // ============================== CALCULADORA DE PONTOS (LIVE) ================
 // Preencha só a Entrada + Direção + Contratos. Saída = 0 usa preço ao vivo.
@@ -1413,12 +1431,12 @@ if barstate.islast and show_bl_tb
 f_draw_ev(idx, et, act, qty, p) =>
     if p > 0 and time <= et and time_close > et
         is_buy = act == "Compra"
-        cor  = is_buy ? color.new(color.blue, 0) : color.new(color.orange, 0)
+        cor  = is_buy ? c_ev_buy : c_ev_sell
         seta = is_buy ? "▲" : "▼"
         stl  = is_buy ? label.style_label_lower_right : label.style_label_upper_right
         label.new(bar_index + 2, p,
              "Ev" + str.tostring(idx) + " " + seta + " " + str.tostring(qty) + "c @ " + str.tostring(p, "#.#"),
-             color=cor, textcolor=color.white, style=stl, size=size.tiny)
+             color=cor, textcolor=c_txt_light, style=stl, size=size.tiny)
         // linha fina do candle real ao label pra manter a referência
         line.new(bar_index, p, bar_index + 2, p, color=color.new(cor, 60), style=line.style_dotted, width=1)
 
