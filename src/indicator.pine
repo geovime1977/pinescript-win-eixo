@@ -949,34 +949,34 @@ mtf_sz = size_from_str(mtf_label_size)
 // 5m — labels dinâmicos
 if show_5m_cmb and up_5m_buy
     txt = "1." + build_ind_code(s5_stoch_b, s5_trix_b, s5_dmi_b)
-    label.new(bar_index, low, txt, style=label.style_arrowup, color=color.new(color.aqua, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.belowbar)
+    label.new(bar_index, low, txt, style=label.style_label_up, color=color.new(color.aqua, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.belowbar)
 if show_5m_cmb and up_5m_sell
     txt = "1." + build_ind_code(s5_stoch_s, s5_trix_s, s5_dmi_s)
-    label.new(bar_index, high, txt, style=label.style_arrowdown, color=color.new(color.aqua, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.abovebar)
+    label.new(bar_index, high, txt, style=label.style_label_down, color=color.new(color.aqua, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.abovebar)
 
 // 15m
 if show_15m_cmb and up_15m_buy
     txt = "2." + build_ind_code(s15_stoch_b, s15_trix_b, s15_dmi_b)
-    label.new(bar_index, low, txt, style=label.style_arrowup, color=color.new(color.lime, 0), textcolor=color.black, size=mtf_sz, yloc=yloc.belowbar)
+    label.new(bar_index, low, txt, style=label.style_label_up, color=color.new(color.lime, 0), textcolor=color.black, size=mtf_sz, yloc=yloc.belowbar)
 if show_15m_cmb and up_15m_sell
     txt = "2." + build_ind_code(s15_stoch_s, s15_trix_s, s15_dmi_s)
-    label.new(bar_index, high, txt, style=label.style_arrowdown, color=color.new(color.lime, 0), textcolor=color.black, size=mtf_sz, yloc=yloc.abovebar)
+    label.new(bar_index, high, txt, style=label.style_label_down, color=color.new(color.lime, 0), textcolor=color.black, size=mtf_sz, yloc=yloc.abovebar)
 
 // 30m
 if show_30m_cmb and up_30m_buy
     txt = "3." + build_ind_code(s30_stoch_b, s30_trix_b, s30_dmi_b)
-    label.new(bar_index, low, txt, style=label.style_arrowup, color=color.new(color.orange, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.belowbar)
+    label.new(bar_index, low, txt, style=label.style_label_up, color=color.new(color.orange, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.belowbar)
 if show_30m_cmb and up_30m_sell
     txt = "3." + build_ind_code(s30_stoch_s, s30_trix_s, s30_dmi_s)
-    label.new(bar_index, high, txt, style=label.style_arrowdown, color=color.new(color.orange, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.abovebar)
+    label.new(bar_index, high, txt, style=label.style_label_down, color=color.new(color.orange, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.abovebar)
 
 // 60m
 if show_60m_cmb and up_60m_buy
     txt = "4." + build_ind_code(s60_stoch_b, s60_trix_b, s60_dmi_b)
-    label.new(bar_index, low, txt, style=label.style_arrowup, color=color.new(color.purple, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.belowbar)
+    label.new(bar_index, low, txt, style=label.style_label_up, color=color.new(color.purple, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.belowbar)
 if show_60m_cmb and up_60m_sell
     txt = "4." + build_ind_code(s60_stoch_s, s60_trix_s, s60_dmi_s)
-    label.new(bar_index, high, txt, style=label.style_arrowdown, color=color.new(color.purple, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.abovebar)
+    label.new(bar_index, high, txt, style=label.style_label_down, color=color.new(color.purple, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.abovebar)
 
 // ============================== MARCA MACD 60m (CONTEXTO MÉDIO PRAZO) ========
 // Marca compacta "M60" cinza no candle do cruzamento. Não pontua no score.
