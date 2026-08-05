@@ -946,8 +946,8 @@ plotshape(show_alert and fibo_touch_sell_alert, title="AVISO 2º toque RES", loc
 
 // Gate v13 legado (2º toque + Estoc 1m + TRIX 5m). Toggle via input gate_mode.
 show_v13 = gate_mode == "v13_legacy" or gate_mode == "ambos"
-plotshape(buy_confirmed_now  and show_v13, title="GATILHO COMPRA v13", location=location.belowbar, color=color.green, style=shape.triangleup,   size=size.small, text="BUYv13")
-plotshape(sell_confirmed_now and show_v13, title="GATILHO VENDA v13",  location=location.abovebar, color=color.red,   style=shape.triangledown, size=size.small, text="SELLv13")
+plotshape(buy_confirmed_now  and show_v13, title="GATILHO COMPRA", location=location.belowbar, color=color.green, style=shape.triangleup,   size=size.small, text="BUY")
+plotshape(sell_confirmed_now and show_v13, title="GATILHO VENDA",  location=location.abovebar, color=color.red,   style=shape.triangledown, size=size.small, text="SELL")
 
 // Gate v14 (2º toque em Fibo + fechamento na direção → entra na abertura do seguinte).
 // Balão preenchido no candle da ENTRADA (candle N+1 ao armed).
