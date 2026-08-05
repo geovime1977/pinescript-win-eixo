@@ -47,7 +47,7 @@ mtf_label_size = input.string("small", "Tamanho das setas MTF", options=["tiny",
 show_macd60  = input.bool(true, "MACD 60m — marcador de cruzamento (contexto)", group=grpMTF, tooltip="Marca no candle quando MACD 60m cruzar. Não pontua no score.")
 
 grpGate = "Gate de Entrada"
-gate_mode = input.string("ambos", "Modo do gate", options=["v14_close","v13_legacy","ambos"], group=grpGate, tooltip="v14_close = 2º toque em Fibo + candle fecha ACIMA (buy) ou ABAIXO (sell) do nível → entra na abertura do seguinte. v13_legacy = gate antigo (2º toque + Estoc 1m + TRIX 5m). ambos (default) = mostra os dois — v14 com balão preenchido, v13 com triângulo aberto.")
+gate_mode = input.string("v14_close", "Modo do gate", options=["v14_close","v13_legacy","ambos"], group=grpGate, tooltip="v14_close (default) = 2º toque em Fibo + candle fecha na direção → entra na abertura do seguinte (anti-dupe: só 1ª seta por direção). v13_legacy = antigo (2º toque + Estoc 1m + TRIX 5m). ambos = mostra os dois.")
 
 grpPnl     = "Painel"
 show_panel = input.bool(true, "Mostrar painel de sinais",           group=grpPnl)
@@ -565,9 +565,35 @@ sell_gate_v14_armed = sell_gate_at(umid, mid_e) or
    sell_gate_at(u300, u300_e) or sell_gate_at(u350, u350_e) or sell_gate_at(u400, u400_e) or
    sell_gate_at(u450, u450_e)
 
-// Sinal v14 = entrada na abertura do candle seguinte ao armed
-buy_signal_v14  = buy_gate_v14_armed[1]
-sell_signal_v14 = sell_gate_v14_armed[1]
+// Sinal v14 bruto = entrada na abertura do candle seguinte ao armed
+buy_signal_v14_raw  = buy_gate_v14_armed[1]
+sell_signal_v14_raw = sell_gate_v14_armed[1]
+
+// Anti-duplicação: só a PRIMEIRA seta por direção. Próxima só depois que:
+//   - passou sig_cooldown candles OU
+//   - disparou um sinal oposto (compra depois de venda ou vice-versa)
+var int  bars_since_v14_buy  = 999999
+var int  bars_since_v14_sell = 999999
+var string last_v14_dir      = ""
+
+if is_new_day
+    bars_since_v14_buy  := 999999
+    bars_since_v14_sell := 999999
+    last_v14_dir        := ""
+
+bars_since_v14_buy  := bars_since_v14_buy  + 1
+bars_since_v14_sell := bars_since_v14_sell + 1
+
+// Só dispara se: (mudou de direção) OU (mesmo lado mas passou o cooldown)
+buy_signal_v14  = buy_signal_v14_raw  and (last_v14_dir != "BUY"  or bars_since_v14_buy  > sig_cooldown)
+sell_signal_v14 = sell_signal_v14_raw and (last_v14_dir != "SELL" or bars_since_v14_sell > sig_cooldown)
+
+if buy_signal_v14
+    bars_since_v14_buy := 0
+    last_v14_dir       := "BUY"
+if sell_signal_v14
+    bars_since_v14_sell := 0
+    last_v14_dir        := "SELL"
 
 // SINAL PREMIUM 4/4: gatilho normal + congruência total nos 4 TFs (5,15,30,60)
 buy_signal_44  = buy_signal_hit  and cong44_buy_score  == 4
