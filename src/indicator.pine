@@ -1,6 +1,6 @@
 // @version=5
 // -----------------------------------------------------------------------------
-// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.11 — 05/08/2026)
+// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.12 — 05/08/2026)
 // -----------------------------------------------------------------------------
 // APLICAR ESTE INDICADOR NO GRÁFICO DE 1 MINUTO DO ATIVO WIN.
 // Timeframe operacional: 1min | Contexto: 5m + 15m + 30m + 60m
@@ -1139,7 +1139,7 @@ adx_mark_30m_sell = adx_activate_30m and score_30m_sell >= 2
 adx_mark_60m_sell = adx_activate_60m and score_60m_sell >= 2
 
 // ============================== TABELA COMPARADOR ADX MTF ====================
-var table tadx = table.new(position.top_center, 5, 4, border_width=1)
+var table tadx = table.new(position.top_center, 5, 5, border_width=1)
 
 // Helpers top-level (Pine v5 não aceita função dentro de if)
 f_adx_bg(v)       => v >= 70 ? color.new(color.red, 40) : v >= 50 ? color.new(color.orange, 50) : v >= 30 ? color.new(color.green, 50) : color.new(color.gray, 70)
@@ -1147,37 +1147,45 @@ f_arr(cur, prev)  => cur > prev ? "▲" : cur < prev ? "▼" : "—"
 f_cor_d(d, thr)   => d <= -thr ? color.new(color.red, 40) : d <= -thr/2 ? color.new(color.orange, 50) : color.new(color.gray, 70)
 
 if barstate.islast and show_adx_cmp
-    hdr = color.new(color.blue, 25)
-    txt = color.white
+    hdr     = color.new(color.blue, 25)
+    txt     = color.white
+    spacer  = color.new(color.gray, 100)  // 100 = totalmente transparente
 
-    table.cell(tadx, 0, 0, "ADX",  bgcolor=hdr, text_color=txt)
-    table.cell(tadx, 1, 0, "5m",   bgcolor=hdr, text_color=txt)
-    table.cell(tadx, 2, 0, "15m",  bgcolor=hdr, text_color=txt)
-    table.cell(tadx, 3, 0, "30m",  bgcolor=hdr, text_color=txt)
-    table.cell(tadx, 4, 0, "60m",  bgcolor=hdr, text_color=txt)
+    // Row 0 = spacer transparente (empurra a tabela alguns pixels pra baixo)
+    table.cell(tadx, 0, 0, " ", bgcolor=spacer, text_color=spacer, text_size=size.small)
+    table.cell(tadx, 1, 0, " ", bgcolor=spacer, text_color=spacer, text_size=size.small)
+    table.cell(tadx, 2, 0, " ", bgcolor=spacer, text_color=spacer, text_size=size.small)
+    table.cell(tadx, 3, 0, " ", bgcolor=spacer, text_color=spacer, text_size=size.small)
+    table.cell(tadx, 4, 0, " ", bgcolor=spacer, text_color=spacer, text_size=size.small)
 
-    table.cell(tadx, 0, 1, "Atual", text_color=txt)
-    table.cell(tadx, 1, 1, str.tostring(adx5,  "#.#") + " " + f_arr(adx5,  adx5[1]),  bgcolor=f_adx_bg(adx5),  text_color=txt)
-    table.cell(tadx, 2, 1, str.tostring(adx15, "#.#") + " " + f_arr(adx15, adx15[1]), bgcolor=f_adx_bg(adx15), text_color=txt)
-    table.cell(tadx, 3, 1, str.tostring(adx30, "#.#") + " " + f_arr(adx30, adx30[1]), bgcolor=f_adx_bg(adx30), text_color=txt)
-    table.cell(tadx, 4, 1, str.tostring(adx60, "#.#") + " " + f_arr(adx60, adx60[1]), bgcolor=f_adx_bg(adx60), text_color=txt)
+    table.cell(tadx, 0, 1, "ADX",  bgcolor=hdr, text_color=txt)
+    table.cell(tadx, 1, 1, "5m",   bgcolor=hdr, text_color=txt)
+    table.cell(tadx, 2, 1, "15m",  bgcolor=hdr, text_color=txt)
+    table.cell(tadx, 3, 1, "30m",  bgcolor=hdr, text_color=txt)
+    table.cell(tadx, 4, 1, "60m",  bgcolor=hdr, text_color=txt)
 
-    table.cell(tadx, 0, 2, "Topo dia", text_color=txt)
-    table.cell(tadx, 1, 2, str.tostring(adx5_peak,  "#.#"), bgcolor=f_adx_bg(adx5_peak),  text_color=txt)
-    table.cell(tadx, 2, 2, str.tostring(adx15_peak, "#.#"), bgcolor=f_adx_bg(adx15_peak), text_color=txt)
-    table.cell(tadx, 3, 2, str.tostring(adx30_peak, "#.#"), bgcolor=f_adx_bg(adx30_peak), text_color=txt)
-    table.cell(tadx, 4, 2, str.tostring(adx60_peak, "#.#"), bgcolor=f_adx_bg(adx60_peak), text_color=txt)
+    table.cell(tadx, 0, 2, "Atual", text_color=txt)
+    table.cell(tadx, 1, 2, str.tostring(adx5,  "#.#") + " " + f_arr(adx5,  adx5[1]),  bgcolor=f_adx_bg(adx5),  text_color=txt)
+    table.cell(tadx, 2, 2, str.tostring(adx15, "#.#") + " " + f_arr(adx15, adx15[1]), bgcolor=f_adx_bg(adx15), text_color=txt)
+    table.cell(tadx, 3, 2, str.tostring(adx30, "#.#") + " " + f_arr(adx30, adx30[1]), bgcolor=f_adx_bg(adx30), text_color=txt)
+    table.cell(tadx, 4, 2, str.tostring(adx60, "#.#") + " " + f_arr(adx60, adx60[1]), bgcolor=f_adx_bg(adx60), text_color=txt)
+
+    table.cell(tadx, 0, 3, "Topo dia", text_color=txt)
+    table.cell(tadx, 1, 3, str.tostring(adx5_peak,  "#.#"), bgcolor=f_adx_bg(adx5_peak),  text_color=txt)
+    table.cell(tadx, 2, 3, str.tostring(adx15_peak, "#.#"), bgcolor=f_adx_bg(adx15_peak), text_color=txt)
+    table.cell(tadx, 3, 3, str.tostring(adx30_peak, "#.#"), bgcolor=f_adx_bg(adx30_peak), text_color=txt)
+    table.cell(tadx, 4, 3, str.tostring(adx60_peak, "#.#"), bgcolor=f_adx_bg(adx60_peak), text_color=txt)
 
     d5  = adx5_peak  > 0 ? (adx5  - adx5_peak)  / adx5_peak  * 100 : 0.0
     d15 = adx15_peak > 0 ? (adx15 - adx15_peak) / adx15_peak * 100 : 0.0
     d30 = adx30_peak > 0 ? (adx30 - adx30_peak) / adx30_peak * 100 : 0.0
     d60 = adx60_peak > 0 ? (adx60 - adx60_peak) / adx60_peak * 100 : 0.0
 
-    table.cell(tadx, 0, 3, "Δ topo", text_color=txt)
-    table.cell(tadx, 1, 3, str.tostring(d5,  "#.#") + "%", bgcolor=f_cor_d(d5,  adx_drop_pct), text_color=txt)
-    table.cell(tadx, 2, 3, str.tostring(d15, "#.#") + "%", bgcolor=f_cor_d(d15, adx_drop_pct), text_color=txt)
-    table.cell(tadx, 3, 3, str.tostring(d30, "#.#") + "%", bgcolor=f_cor_d(d30, adx_drop_pct), text_color=txt)
-    table.cell(tadx, 4, 3, str.tostring(d60, "#.#") + "%", bgcolor=f_cor_d(d60, adx_drop_pct), text_color=txt)
+    table.cell(tadx, 0, 4, "Δ topo", text_color=txt)
+    table.cell(tadx, 1, 4, str.tostring(d5,  "#.#") + "%", bgcolor=f_cor_d(d5,  adx_drop_pct), text_color=txt)
+    table.cell(tadx, 2, 4, str.tostring(d15, "#.#") + "%", bgcolor=f_cor_d(d15, adx_drop_pct), text_color=txt)
+    table.cell(tadx, 3, 4, str.tostring(d30, "#.#") + "%", bgcolor=f_cor_d(d30, adx_drop_pct), text_color=txt)
+    table.cell(tadx, 4, 4, str.tostring(d60, "#.#") + "%", bgcolor=f_cor_d(d60, adx_drop_pct), text_color=txt)
 
 // ADX markers agora usam o MESMO sistema de lanes dos MTF combos +
 // 1 candle à direita, pra não sobrepor com "1.x", "2.x", "3.x", "4.x".
@@ -1361,7 +1369,7 @@ grand_total_pts = realized_pnl_pts + open_pnl_pts
 grand_total_rs  = realized_pnl_rs  + open_pnl_rs
 
 // -------- Tabela BLOTTER --------
-var table tbl = table.new(position.bottom_center, 2, 10, border_width=1)
+var table tbl = table.new(position.bottom_left, 2, 10, border_width=1)
 
 if barstate.islast and show_bl_tb
     hdr    = color.new(color.blue, 25)
