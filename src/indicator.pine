@@ -35,6 +35,8 @@ sig_cooldown     = input.int(5, "Cooldown entre sinais (candles)",     group=grp
 max_gap_touches  = input.int(10, "Máx. candles entre 1º e 2º toque",   group=grpSig, minval=2, maxval=50, tooltip="Se o 2º toque no mesmo Fibo demorar mais que N candles, o setup expira. O próximo toque vira novo 1º toque.")
 wait_after_touch = input.int(1, "Janela pra confirmação após 2º toque (candles)", group=grpSig, minval=1, maxval=30, tooltip="Cross de Estoc 1m ou TRIX 5m vale entre o 2º toque e até N candles depois. Default 1 = apenas o candle do toque + próximo. Cross fora dessa janela é ignorado.")
 min_extras       = input.int(2, "Mín. confirmações (Estoc 1m + TRIX 5m)", group=grpSig, minval=1, maxval=2, tooltip="2 (default v14) = exige AMBOS Estocástico 1m E TRIX 5m na direção. 1 = basta um dos dois.")
+anti_faca    = input.bool(true, "Anti-faca (bloqueia se HTF 3/3 contra)", group=grpSig, tooltip="Bloqueia BUY se 15m OU 30m OU 60m estiver em score 3/3 SELL. Idem SELL. Vale pros dois gates (v13 e v14). Evita pegar faca caindo.")
+adx_bonus    = input.int(5, "Bônus contratos quando ADX 5m intensifica", group=grpSig, minval=0, maxval=10, tooltip="Se ADX 5m está ativo (> 30 ou banda 70-80 caindo) → soma +N contratos ao sizing base (limitado por sizing_cap).")
 show_alert   = input.bool(true, "Mostrar seta amarela de AVISO no 2º toque", group=grpSig, tooltip="Aviso visual do 2º toque, ANTES de qualquer confirmação — serve pra você se preparar.")
 sizing_cap   = input.int(20, "Cap máximo de contratos (5×4TFs)",         group=grpSig, minval=5, maxval=100)
 
@@ -538,11 +540,13 @@ score_30m_sell = (s30_stoch_s ? 1 : 0) + (s30_trix_s ? 1 : 0) + (s30_dmi_s ? 1 :
 score_60m_buy  = (s60_stoch_b ? 1 : 0) + (s60_trix_b ? 1 : 0) + (s60_dmi_b ? 1 : 0)
 score_60m_sell = (s60_stoch_s ? 1 : 0) + (s60_trix_s ? 1 : 0) + (s60_dmi_s ? 1 : 0)
 
-// Filtro anti-tendência: bloqueia entrada se qualquer TF superior (15/30/60)
-// estiver em score >= 3 na direção OPOSTA (todos os 3 indicadores contra).
-// v14: anti_faca removido — ADX é só marcador visual, não bloqueia entrada.
-buy_signal_hit  = buy_touch_window_open  and buy_extras_score  >= min_extras
-sell_signal_hit = sell_touch_window_open and sell_extras_score >= min_extras
+// Filtro anti-faca (restaurado v14.1): bloqueia entrada se qualquer HTF (15/30/60)
+// estiver em score 3/3 na direção OPOSTA. Vale pra v13 E v14.
+anti_faca_buy_ok  = not anti_faca or (score_15m_sell < 3 and score_30m_sell < 3 and score_60m_sell < 3)
+anti_faca_sell_ok = not anti_faca or (score_15m_buy  < 3 and score_30m_buy  < 3 and score_60m_buy  < 3)
+
+buy_signal_hit  = buy_touch_window_open  and buy_extras_score  >= min_extras and anti_faca_buy_ok
+sell_signal_hit = sell_touch_window_open and sell_extras_score >= min_extras and anti_faca_sell_ok
 
 // ============================== GATE v14 (2º TOQUE + FECHAMENTO) ============
 // Regra: 2ª batida no Fibo E candle fecha ACIMA (buy) ou ABAIXO (sell) do nível
@@ -566,8 +570,9 @@ sell_gate_v14_armed = sell_gate_at(umid, mid_e) or
    sell_gate_at(u450, u450_e)
 
 // Sinal v14 bruto = entrada na abertura do candle seguinte ao armed
-buy_signal_v14_raw  = buy_gate_v14_armed[1]
-sell_signal_v14_raw = sell_gate_v14_armed[1]
+// Anti-faca aplicado também no v14 (mesma semântica: bloqueia se HTF 3/3 contra).
+buy_signal_v14_raw  = buy_gate_v14_armed[1]  and anti_faca_buy_ok
+sell_signal_v14_raw = sell_gate_v14_armed[1] and anti_faca_sell_ok
 
 // Anti-duplicação: só a PRIMEIRA seta por direção. Próxima só depois que:
 //   - passou sig_cooldown candles OU
@@ -639,7 +644,8 @@ if sell_signal_new
 // Ex.: só 5m compra → 5 ctr | 5m+15m → 10 ctr | 5m+15m+30m → 15 ctr | todos 4 → 20 ctr
 n_tfs_buy_now  = (cmb_5m_buy_st  ? 1 : 0) + (cmb_15m_buy_st  ? 1 : 0) + (cmb_30m_buy_st  ? 1 : 0) + (cmb_60m_buy_st  ? 1 : 0)
 n_tfs_sell_now = (cmb_5m_sell_st ? 1 : 0) + (cmb_15m_sell_st ? 1 : 0) + (cmb_30m_sell_st ? 1 : 0) + (cmb_60m_sell_st ? 1 : 0)
-sizing_by_tfs(n) => math.max(5, math.min(sizing_cap, 5 * n))
+// v14.1: sizing = 5 × N_TFs + bônus se ADX 5m intensificando (limitado por cap)
+sizing_by_tfs(n) => math.max(5, math.min(sizing_cap, 5 * n + (adx_intensifier ? adx_bonus : 0)))
 
 // ============================== POSIÇÃO IMPLÍCITA + SCALE-OUT ================
 // Rastreia posição assumida a partir do último buy_signal_new / sell_signal_new.

@@ -30,6 +30,8 @@ gap_bars   = input.int(3, "Gap mínimo entre eventos",       minval=1, maxval=20
 reset_gap  = input.int(15, "Reset contador após N candles sem tocar", minval=3, maxval=100)
 max_gap_touches  = input.int(10, "Máx. candles entre 1º e 2º toque", minval=2, maxval=50)
 sizing_cap = input.int(20, "Cap máximo de contratos (5 × 4 TFs)", minval=5, maxval=100)
+anti_faca  = input.bool(true, "Anti-faca (bloqueia se HTF 3/3 contra)", tooltip="Bloqueia BUY se 15m OU 30m OU 60m estiver em score 3/3 SELL. Idem SELL. Evita pegar faca caindo.")
+adx_bonus  = input.int(5, "Bônus contratos quando ADX 5m intensifica", minval=0, maxval=10, tooltip="Se ADX 5m está ativo (> 30 ou banda 70-80 caindo) → soma +N contratos ao sizing (limitado por cap).")
 use_macd60_filter = input.bool(false, "Filtro MACD 60m (bloqueia trade contra o estado)", tooltip="Se ligado, só entra COMPRA quando MACD 60m está em compra (macd > sinal), e só entra VENDA quando MACD 60m está em venda. Default desligado — MACD é só contextual.")
 
 session_end_h = input.int(17, "Hora limite pra abrir posição",  minval=10, maxval=17)
@@ -347,10 +349,13 @@ sell_gate_armed = sell_gate_at(umid, mide) or
    sell_gate_at(u450, u450e)
 
 // Sinal v14 = fires no candle seguinte (na abertura)
+// Filtros: MACD 60m (opcional) + anti-faca (default on, bloqueia HTF 3/3 contra)
 macd60_buy_ok  = not use_macd60_filter or macd60_state_buy
 macd60_sell_ok = not use_macd60_filter or not macd60_state_buy
-buy_signal_hit  = buy_gate_armed[1]  and macd60_buy_ok
-sell_signal_hit = sell_gate_armed[1] and macd60_sell_ok
+anti_faca_buy_ok  = not anti_faca or (score_15m_sell < 3 and score_30m_sell < 3 and score_60m_sell < 3)
+anti_faca_sell_ok = not anti_faca or (score_15m_buy  < 3 and score_30m_buy  < 3 and score_60m_buy  < 3)
+buy_signal_hit  = buy_gate_armed[1]  and macd60_buy_ok  and anti_faca_buy_ok
+sell_signal_hit = sell_gate_armed[1] and macd60_sell_ok and anti_faca_sell_ok
 
 // ============================== SESSION FILTER ==============================
 in_entry_window = (hour < session_end_h) or (hour == session_end_h and minute < session_end_m)
@@ -358,7 +363,8 @@ in_eod_window   = (hour > force_close_h) or (hour == force_close_h and minute >=
 
 // ============================== SIZING v14 ==================================
 // 5 contratos × N_TFs com 3/3 (mín 5, máx 20).
-sizing_by_tfs(n) => math.max(5, math.min(sizing_cap, 5 * n))
+// v14.1: sizing = 5 × N_TFs + bônus ADX 5m (limitado por cap)
+sizing_by_tfs(n) => math.max(5, math.min(sizing_cap, 5 * n + (adx5_active ? adx_bonus : 0)))
 
 // ============================== ENTRADAS ====================================
 // 10 alvos Fibo iguais + stop = fib_range × 0.5 do preço de entrada.
