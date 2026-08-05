@@ -1,6 +1,6 @@
 // @version=5
 // -----------------------------------------------------------------------------
-// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14 — 04/08/2026)
+// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.10 — 05/08/2026)
 // -----------------------------------------------------------------------------
 // APLICAR ESTE INDICADOR NO GRÁFICO DE 1 MINUTO DO ATIVO WIN.
 // Timeframe operacional: 1min | Contexto: 5m + 15m + 30m + 60m
@@ -256,6 +256,47 @@ get_higher_tf() =>
 [dmp15, dmn15, adx15, adx_active_15] = request.security(syminfo.tickerid, "15", get_higher_tf(), lookahead=barmerge.lookahead_off)
 [dmp30, dmn30, adx30, adx_active_30] = request.security(syminfo.tickerid, "30", get_higher_tf(), lookahead=barmerge.lookahead_off)
 [dmp60, dmn60, adx60, adx_active_60] = request.security(syminfo.tickerid, "60", get_higher_tf(), lookahead=barmerge.lookahead_off)
+
+// ============================== ADX PEAK TRACKER (early declarations) =======
+// Precisamos das flags de peak/exhausted disponíveis pra o Painel MTF (linha 766).
+// Os inputs de config + tabela comparadora ficam no bloco maior mais abaixo.
+grp_adx_pk   = "ADX Peak Tracker"
+adx_drop_pct = input.float(15.0, "Queda do topo pra sinalizar exaustão (%)", group=grp_adx_pk, minval=5, maxval=50, step=1)
+adx_min_peak = input.float(40.0, "Topo mínimo pra valer exaustão",           group=grp_adx_pk, minval=25, maxval=80, step=1)
+show_adx_cmp = input.bool(true,  "Mostrar tabela comparador ADX MTF",         group=grp_adx_pk)
+
+is_new_day_adx = ta.change(dayofmonth) != 0
+
+var float adx5_peak  = 0.0
+var float adx15_peak = 0.0
+var float adx30_peak = 0.0
+var float adx60_peak = 0.0
+
+if is_new_day_adx
+    adx5_peak  := 0.0
+    adx15_peak := 0.0
+    adx30_peak := 0.0
+    adx60_peak := 0.0
+
+adx5_peak  := math.max(adx5_peak,  nz(adx5))
+adx15_peak := math.max(adx15_peak, nz(adx15))
+adx30_peak := math.max(adx30_peak, nz(adx30))
+adx60_peak := math.max(adx60_peak, nz(adx60))
+
+adx5_thr  = adx5_peak  * (1 - adx_drop_pct / 100)
+adx15_thr = adx15_peak * (1 - adx_drop_pct / 100)
+adx30_thr = adx30_peak * (1 - adx_drop_pct / 100)
+adx60_thr = adx60_peak * (1 - adx_drop_pct / 100)
+
+adx5_peak_lost  = adx5_peak  >= adx_min_peak and adx5  < adx5_thr  and adx5[1]  >= adx5_thr
+adx15_peak_lost = adx15_peak >= adx_min_peak and adx15 < adx15_thr and adx15[1] >= adx15_thr
+adx30_peak_lost = adx30_peak >= adx_min_peak and adx30 < adx30_thr and adx30[1] >= adx30_thr
+adx60_peak_lost = adx60_peak >= adx_min_peak and adx60 < adx60_thr and adx60[1] >= adx60_thr
+
+adx5_exhausted  = adx5_peak  >= adx_min_peak and adx5  < adx5_thr
+adx15_exhausted = adx15_peak >= adx_min_peak and adx15 < adx15_thr
+adx30_exhausted = adx30_peak >= adx_min_peak and adx30 < adx30_thr
+adx60_exhausted = adx60_peak >= adx_min_peak and adx60 < adx60_thr
 
 // Alinhamento direcional por TF (agora usa a regra completa ADX>30 fresh OU banda 70-80 caindo)
 cong5_buy   = adx_intensifier and dmp5  > dmn5
@@ -763,6 +804,9 @@ fmt_tf(sb, tb, db, score) => light(sb) + light(tb) + light(db) + " " + str.tostr
 
 color_tf(score) => score == 3 ? color.new(color.yellow, 0) : score == 2 ? color.new(color.orange, 0) : color.new(color.gray, 30)
 
+// Helper (top-level: Pine v5 não permite função dentro de if)
+f_adx_pnl(active, exhausted, v, peak) => exhausted ? " ⚪ADX " + str.tostring(v, "#") + "/" + str.tostring(peak, "#") : (active ? " 🟢ADX " + str.tostring(v, "#") + "/" + str.tostring(peak, "#") : "")
+
 if show_panel and barstate.islast
     table.clear(pnl, 0, 0, 2, 10)
     table.cell(pnl, 0, 0, "EIXO WIN — Painel MTF",   bgcolor=color.new(color.black, 30), text_color=color.white, text_size=size.small)
@@ -773,18 +817,18 @@ if show_panel and barstate.islast
     table.cell(pnl, 2, 1, light(sell_cond1),          text_size=size.tiny)
     // Setup por TF (Est/TRIX/DMI = DIREÇÃO, sem ADX) — luzes + X/3
     // ADX aparece separadamente como marca de intensidade no gráfico (número TF grande)
-    table.cell(pnl, 0, 2, "5m (Est/TRIX/DMI) +ADX",   text_size=size.tiny, tooltip="Score de DIREÇÃO 5m (max 3). ADX aparece como número '1' grande no candle quando ativa (intensifica o movimento).")
-    table.cell(pnl, 1, 2, fmt_tf(s5_stoch_b, s5_trix_b, s5_dmi_b, score_5m_buy)   + (s5_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_5m_buy))
-    table.cell(pnl, 2, 2, fmt_tf(s5_stoch_s, s5_trix_s, s5_dmi_s, score_5m_sell)  + (s5_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_5m_sell))
-    table.cell(pnl, 0, 3, "15m (Est/TRIX/DMI) +ADX",  text_size=size.tiny, tooltip="ADX ativa → número '2' grande no candle.")
-    table.cell(pnl, 1, 3, fmt_tf(s15_stoch_b, s15_trix_b, s15_dmi_b, score_15m_buy)  + (s15_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_15m_buy))
-    table.cell(pnl, 2, 3, fmt_tf(s15_stoch_s, s15_trix_s, s15_dmi_s, score_15m_sell) + (s15_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_15m_sell))
-    table.cell(pnl, 0, 4, "30m (Est/TRIX/DMI) +ADX",  text_size=size.tiny, tooltip="ADX ativa → número '3' grande no candle.")
-    table.cell(pnl, 1, 4, fmt_tf(s30_stoch_b, s30_trix_b, s30_dmi_b, score_30m_buy)  + (s30_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_30m_buy))
-    table.cell(pnl, 2, 4, fmt_tf(s30_stoch_s, s30_trix_s, s30_dmi_s, score_30m_sell) + (s30_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_30m_sell))
-    table.cell(pnl, 0, 5, "60m (Est/TRIX/DMI) +ADX",  text_size=size.tiny, tooltip="ADX ativa → número '4' grande no candle.")
-    table.cell(pnl, 1, 5, fmt_tf(s60_stoch_b, s60_trix_b, s60_dmi_b, score_60m_buy)  + (s60_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_60m_buy))
-    table.cell(pnl, 2, 5, fmt_tf(s60_stoch_s, s60_trix_s, s60_dmi_s, score_60m_sell) + (s60_adx_a ? " +ADX" : ""),   text_size=size.tiny, text_color=color_tf(score_60m_sell))
+    table.cell(pnl, 0, 2, "5m (Est/TRIX/DMI)",   text_size=size.tiny, tooltip="Score de DIREÇÃO 5m (max 3). ADX: 🟢 ativa · ⚪ perdeu topo · valor/topo.")
+    table.cell(pnl, 1, 2, fmt_tf(s5_stoch_b, s5_trix_b, s5_dmi_b, score_5m_buy)   + f_adx_pnl(s5_adx_a, adx5_exhausted, adx5, adx5_peak),   text_size=size.tiny, text_color=color_tf(score_5m_buy))
+    table.cell(pnl, 2, 2, fmt_tf(s5_stoch_s, s5_trix_s, s5_dmi_s, score_5m_sell)  + f_adx_pnl(s5_adx_a, adx5_exhausted, adx5, adx5_peak),   text_size=size.tiny, text_color=color_tf(score_5m_sell))
+    table.cell(pnl, 0, 3, "15m (Est/TRIX/DMI)",  text_size=size.tiny, tooltip="ADX: 🟢 ativa · ⚪ perdeu topo · valor/topo.")
+    table.cell(pnl, 1, 3, fmt_tf(s15_stoch_b, s15_trix_b, s15_dmi_b, score_15m_buy)  + f_adx_pnl(s15_adx_a, adx15_exhausted, adx15, adx15_peak),   text_size=size.tiny, text_color=color_tf(score_15m_buy))
+    table.cell(pnl, 2, 3, fmt_tf(s15_stoch_s, s15_trix_s, s15_dmi_s, score_15m_sell) + f_adx_pnl(s15_adx_a, adx15_exhausted, adx15, adx15_peak),   text_size=size.tiny, text_color=color_tf(score_15m_sell))
+    table.cell(pnl, 0, 4, "30m (Est/TRIX/DMI)",  text_size=size.tiny, tooltip="ADX: 🟢 ativa · ⚪ perdeu topo · valor/topo.")
+    table.cell(pnl, 1, 4, fmt_tf(s30_stoch_b, s30_trix_b, s30_dmi_b, score_30m_buy)  + f_adx_pnl(s30_adx_a, adx30_exhausted, adx30, adx30_peak),   text_size=size.tiny, text_color=color_tf(score_30m_buy))
+    table.cell(pnl, 2, 4, fmt_tf(s30_stoch_s, s30_trix_s, s30_dmi_s, score_30m_sell) + f_adx_pnl(s30_adx_a, adx30_exhausted, adx30, adx30_peak),   text_size=size.tiny, text_color=color_tf(score_30m_sell))
+    table.cell(pnl, 0, 5, "60m (Est/TRIX/DMI)",  text_size=size.tiny, tooltip="ADX: 🟢 ativa · ⚪ perdeu topo · valor/topo.")
+    table.cell(pnl, 1, 5, fmt_tf(s60_stoch_b, s60_trix_b, s60_dmi_b, score_60m_buy)  + f_adx_pnl(s60_adx_a, adx60_exhausted, adx60, adx60_peak),   text_size=size.tiny, text_color=color_tf(score_60m_buy))
+    table.cell(pnl, 2, 5, fmt_tf(s60_stoch_s, s60_trix_s, s60_dmi_s, score_60m_sell) + f_adx_pnl(s60_adx_a, adx60_exhausted, adx60, adx60_peak),   text_size=size.tiny, text_color=color_tf(score_60m_sell))
     // MACD 60m (contexto médio prazo — não pontua no score)
     table.cell(pnl, 0, 6, "MACD 60m (contexto)", text_size=size.tiny, tooltip="Cruzamento MACD 60m (12,26,9). Filtro contextual — não conta no score MTF.")
     table.cell(pnl, 1, 6, macd60_state_buy ? "🟢 compra" : "—", text_size=size.tiny, text_color=(macd60_state_buy ? color.green : color.gray))
@@ -1071,31 +1115,305 @@ alertcondition(macd60_cross_up or macd60_cross_dn,
      title="Eixo WIN — MACD 60m cruzamento",
      message="{{ticker}} @ {{close}} | MACD 60m cruzou — filtro contextual médio prazo")
 
-// ============================== MARCA ADX (INTENSIFICADOR) ===================
-// Quando ADX de um TF ATIVA (cruzou 30↑ OU banda 70-80 caindo) E pelo menos 2/3
-// dos indicadores daquele TF apontam na mesma direção → mostra número grande do
-// TF (1=5m, 2=15m, 3=30m, 4=60m) no candle, tonalidade máxima (opaca).
-// "ADX direciona a intensidade" — sem ele o setup ainda vale mas sem força extra.
+// ============================== MARCA ADX (INTENSIFICADOR DIRECIONAL) ========
+// ▲ SETA CIMA (labelup, abaixo do candle): ADX cruzou 30↑ E score 2/3 pra COMPRA
+// ▼ SETA BAIXO (labeldown, acima do candle): ADX cruzou 30↑ E score 2/3 pra VENDA
+// Exaustão (perda de topo) NÃO aparece no gráfico — só no Painel MTF (⚪ADX)
+// e na tabela comparadora ADX MTF (Δ topo colorido). Chart já tem markers demais.
 
 adx_activate_5m  = s5_adx_a  and not s5_adx_a[1]
 adx_activate_15m = s15_adx_a and not s15_adx_a[1]
 adx_activate_30m = s30_adx_a and not s30_adx_a[1]
 adx_activate_60m = s60_adx_a and not s60_adx_a[1]
 
-adx_mark_5m_buy   = adx_activate_5m  and score_5m_buy  >= 2
-adx_mark_5m_sell  = adx_activate_5m  and score_5m_sell >= 2
-adx_mark_15m_buy  = adx_activate_15m and score_15m_buy  >= 2
+// ▲ Up markers = favorável ENTRADA COMPRA (ADX ignitando + 2/3 direcional buy)
+adx_mark_5m_buy  = adx_activate_5m  and score_5m_buy  >= 2
+adx_mark_15m_buy = adx_activate_15m and score_15m_buy >= 2
+adx_mark_30m_buy = adx_activate_30m and score_30m_buy >= 2
+adx_mark_60m_buy = adx_activate_60m and score_60m_buy >= 2
+
+// ▼ Down markers = favorável ENTRADA VENDA (ADX ignitando + 2/3 direcional sell)
+adx_mark_5m_sell  = adx_activate_5m  and score_5m_sell  >= 2
 adx_mark_15m_sell = adx_activate_15m and score_15m_sell >= 2
-adx_mark_30m_buy  = adx_activate_30m and score_30m_buy  >= 2
 adx_mark_30m_sell = adx_activate_30m and score_30m_sell >= 2
-adx_mark_60m_buy  = adx_activate_60m and score_60m_buy  >= 2
 adx_mark_60m_sell = adx_activate_60m and score_60m_sell >= 2
 
-plotshape(adx_mark_5m_buy,   title="ADX 5m BUY",   location=location.belowbar, color=color.new(color.aqua,   0), style=shape.labelup,   size=size.small, text="A5",  textcolor=color.white)
-plotshape(adx_mark_5m_sell,  title="ADX 5m SELL",  location=location.abovebar, color=color.new(color.aqua,   0), style=shape.labeldown, size=size.small, text="A5",  textcolor=color.white)
-plotshape(adx_mark_15m_buy,  title="ADX 15m BUY",  location=location.belowbar, color=color.new(color.lime,   0), style=shape.labelup,   size=size.small, text="A15", textcolor=color.black)
-plotshape(adx_mark_15m_sell, title="ADX 15m SELL", location=location.abovebar, color=color.new(color.lime,   0), style=shape.labeldown, size=size.small, text="A15", textcolor=color.black)
-plotshape(adx_mark_30m_buy,  title="ADX 30m BUY",  location=location.belowbar, color=color.new(color.orange, 0), style=shape.labelup,   size=size.small, text="A30", textcolor=color.white)
-plotshape(adx_mark_30m_sell, title="ADX 30m SELL", location=location.abovebar, color=color.new(color.orange, 0), style=shape.labeldown, size=size.small, text="A30", textcolor=color.white)
-plotshape(adx_mark_60m_buy,  title="ADX 60m BUY",  location=location.belowbar, color=color.new(color.purple, 0), style=shape.labelup,   size=size.small, text="A60", textcolor=color.white)
-plotshape(adx_mark_60m_sell, title="ADX 60m SELL", location=location.abovebar, color=color.new(color.purple, 0), style=shape.labeldown, size=size.small, text="A60", textcolor=color.white)
+// ============================== TABELA COMPARADOR ADX MTF ====================
+var table tadx = table.new(position.middle_left, 5, 4, border_width=1)
+
+// Helpers top-level (Pine v5 não aceita função dentro de if)
+f_adx_bg(v)       => v >= 70 ? color.new(color.red, 40) : v >= 50 ? color.new(color.orange, 50) : v >= 30 ? color.new(color.green, 50) : color.new(color.gray, 70)
+f_arr(cur, prev)  => cur > prev ? "▲" : cur < prev ? "▼" : "—"
+f_cor_d(d, thr)   => d <= -thr ? color.new(color.red, 40) : d <= -thr/2 ? color.new(color.orange, 50) : color.new(color.gray, 70)
+
+if barstate.islast and show_adx_cmp
+    hdr = color.new(color.blue, 25)
+    txt = color.white
+
+    table.cell(tadx, 0, 0, "ADX",  bgcolor=hdr, text_color=txt)
+    table.cell(tadx, 1, 0, "5m",   bgcolor=hdr, text_color=txt)
+    table.cell(tadx, 2, 0, "15m",  bgcolor=hdr, text_color=txt)
+    table.cell(tadx, 3, 0, "30m",  bgcolor=hdr, text_color=txt)
+    table.cell(tadx, 4, 0, "60m",  bgcolor=hdr, text_color=txt)
+
+    table.cell(tadx, 0, 1, "Atual", text_color=txt)
+    table.cell(tadx, 1, 1, str.tostring(adx5,  "#.#") + " " + f_arr(adx5,  adx5[1]),  bgcolor=f_adx_bg(adx5),  text_color=txt)
+    table.cell(tadx, 2, 1, str.tostring(adx15, "#.#") + " " + f_arr(adx15, adx15[1]), bgcolor=f_adx_bg(adx15), text_color=txt)
+    table.cell(tadx, 3, 1, str.tostring(adx30, "#.#") + " " + f_arr(adx30, adx30[1]), bgcolor=f_adx_bg(adx30), text_color=txt)
+    table.cell(tadx, 4, 1, str.tostring(adx60, "#.#") + " " + f_arr(adx60, adx60[1]), bgcolor=f_adx_bg(adx60), text_color=txt)
+
+    table.cell(tadx, 0, 2, "Topo dia", text_color=txt)
+    table.cell(tadx, 1, 2, str.tostring(adx5_peak,  "#.#"), bgcolor=f_adx_bg(adx5_peak),  text_color=txt)
+    table.cell(tadx, 2, 2, str.tostring(adx15_peak, "#.#"), bgcolor=f_adx_bg(adx15_peak), text_color=txt)
+    table.cell(tadx, 3, 2, str.tostring(adx30_peak, "#.#"), bgcolor=f_adx_bg(adx30_peak), text_color=txt)
+    table.cell(tadx, 4, 2, str.tostring(adx60_peak, "#.#"), bgcolor=f_adx_bg(adx60_peak), text_color=txt)
+
+    d5  = adx5_peak  > 0 ? (adx5  - adx5_peak)  / adx5_peak  * 100 : 0.0
+    d15 = adx15_peak > 0 ? (adx15 - adx15_peak) / adx15_peak * 100 : 0.0
+    d30 = adx30_peak > 0 ? (adx30 - adx30_peak) / adx30_peak * 100 : 0.0
+    d60 = adx60_peak > 0 ? (adx60 - adx60_peak) / adx60_peak * 100 : 0.0
+
+    table.cell(tadx, 0, 3, "Δ topo", text_color=txt)
+    table.cell(tadx, 1, 3, str.tostring(d5,  "#.#") + "%", bgcolor=f_cor_d(d5,  adx_drop_pct), text_color=txt)
+    table.cell(tadx, 2, 3, str.tostring(d15, "#.#") + "%", bgcolor=f_cor_d(d15, adx_drop_pct), text_color=txt)
+    table.cell(tadx, 3, 3, str.tostring(d30, "#.#") + "%", bgcolor=f_cor_d(d30, adx_drop_pct), text_color=txt)
+    table.cell(tadx, 4, 3, str.tostring(d60, "#.#") + "%", bgcolor=f_cor_d(d60, adx_drop_pct), text_color=txt)
+
+// ADX markers agora usam o MESMO sistema de lanes dos MTF combos +
+// 1 candle à direita, pra não sobrepor com "1.x", "2.x", "3.x", "4.x".
+// Cada A{N} sai na lane do seu TF, um bar depois do trigger.
+adx_off = 1  // bars à direita do trigger
+
+if adx_mark_5m_buy
+    label.new(bar_index + adx_off, low  - lane_1, "A5",  style=label.style_label_up,   color=color.new(color.aqua,   0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+if adx_mark_5m_sell
+    label.new(bar_index + adx_off, high + lane_1, "A5",  style=label.style_label_down, color=color.new(color.aqua,   0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+if adx_mark_15m_buy
+    label.new(bar_index + adx_off, low  - lane_2, "A15", style=label.style_label_up,   color=color.new(color.lime,   0), textcolor=color.black, size=size.tiny, yloc=yloc.price)
+if adx_mark_15m_sell
+    label.new(bar_index + adx_off, high + lane_2, "A15", style=label.style_label_down, color=color.new(color.lime,   0), textcolor=color.black, size=size.tiny, yloc=yloc.price)
+if adx_mark_30m_buy
+    label.new(bar_index + adx_off, low  - lane_3, "A30", style=label.style_label_up,   color=color.new(color.orange, 0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+if adx_mark_30m_sell
+    label.new(bar_index + adx_off, high + lane_3, "A30", style=label.style_label_down, color=color.new(color.orange, 0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+if adx_mark_60m_buy
+    label.new(bar_index + adx_off, low  - lane_4, "A60", style=label.style_label_up,   color=color.new(color.purple, 0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+if adx_mark_60m_sell
+    label.new(bar_index + adx_off, high + lane_4, "A60", style=label.style_label_down, color=color.new(color.purple, 0), textcolor=color.white, size=size.tiny, yloc=yloc.price)
+
+// ============================== CALCULADORA DE PONTOS (LIVE) ================
+// Preencha só a Entrada + Direção + Contratos. Saída = 0 usa preço ao vivo.
+// Coloca valor em Saída pra congelar o resultado.
+// WIN: 1 ponto = R$ 0,20 por contrato.
+grp_calc   = "Calculadora de Pontos"
+calc_on    = input.bool(true,  "Mostrar calculadora",                group=grp_calc)
+calc_dir   = input.string("Compra", "Direção", options=["Compra","Venda"], group=grp_calc)
+calc_entry = input.float(0.0, "Entrada",             step=5, group=grp_calc)
+calc_exit  = input.float(0.0, "Saída (0 = ao vivo)", step=5, group=grp_calc)
+calc_qty   = input.int(1,     "Contratos", minval=1, group=grp_calc)
+
+var table tcalc = table.new(position.bottom_right, 2, 5, border_width=1)
+f_fmt(v) => str.tostring(v, "#.#")
+
+if calc_on and barstate.islast
+    ativo    = calc_entry > 0
+    usa_live = calc_exit <= 0
+    saida_v  = usa_live ? close : calc_exit
+    saida_lb = usa_live ? "AO VIVO" : "SAÍDA FIXA"
+    pts      = not ativo ? 0.0 : (calc_dir == "Compra" ? saida_v - calc_entry : calc_entry - saida_v)
+    rs_tot   = pts * 0.20 * calc_qty
+    cor      = not ativo ? color.new(color.gray, 60) : (pts >= 0 ? color.new(color.green, 55) : color.new(color.red, 55))
+    hdr      = color.new(color.blue, 25)
+    txt      = color.white
+
+    table.cell(tcalc, 0, 0, saida_lb,                        bgcolor=hdr, text_color=txt)
+    table.cell(tcalc, 1, 0, calc_dir,                        bgcolor=hdr, text_color=txt)
+    table.cell(tcalc, 0, 1, "Entrada",                       text_color=txt)
+    table.cell(tcalc, 1, 1, ativo ? f_fmt(calc_entry) : "—", text_color=txt)
+    table.cell(tcalc, 0, 2, "Preço atual",                   text_color=txt)
+    table.cell(tcalc, 1, 2, f_fmt(saida_v),                  text_color=txt)
+    table.cell(tcalc, 0, 3, "Pontos",                        bgcolor=cor, text_color=txt)
+    table.cell(tcalc, 1, 3, ativo ? f_fmt(pts) : "—",        bgcolor=cor, text_color=txt)
+    table.cell(tcalc, 0, 4, "R$ ×" + str.tostring(calc_qty), bgcolor=cor, text_color=txt)
+    table.cell(tcalc, 1, 4, ativo ? "R$ " + str.tostring(rs_tot, "#.##") : "—", bgcolor=cor, text_color=txt)
+
+// ============================== TRADE BLOTTER (v14.8) ========================
+// 10 EVENTOS individuais. Cada evento tem sua PRÓPRIA ação (Compra ou Venda),
+// Qtd e Preço. A calculadora rastreia:
+//   - Posição líquida (LONG / SHORT / FLAT) via soma cumulativa
+//   - Preço médio ponderado das compras e vendas
+//   - P&L realizado (parte fechada) + P&L aberto (parte ainda em posição, live)
+//   - TOTAL da sessão em pontos + R$
+//
+// Exemplo do usuário (05/08):
+//   Ev1  09:08  Compra 4c @ 179030
+//   Ev2  09:50  Venda  2c @ 179100
+//   Ev3  10:08  Compra 2c @ 179050
+//   Ev4  10:15  Venda  2c @ 179150
+//   Ev5  10:35  Compra 2c @ 179080
+//   → Total: 8c comprados · 4c vendidos → LONG 4c abertos
+//   → 4c fechados com P&L realizado + 4c abertos com P&L live vs preço atual
+grp_bl     = "Trade Blotter (10 eventos, cada um Compra ou Venda)"
+show_bl    = input.bool(true, "Mostrar setas de eventos no gráfico", group=grp_bl)
+show_bl_tb = input.bool(true, "Mostrar tabela BLOTTER",               group=grp_bl)
+
+// -------- 10 eventos: Data/Hora + Ação + Qtd + Preço --------
+ev1_t   = input.time(timestamp("2020-01-01T00:00"), "Ev1 Data/Hora", group=grp_bl, inline="ev1")
+ev1_act = input.string("Compra", "", options=["Compra","Venda"],     group=grp_bl, inline="ev1")
+ev1_qty = input.int(1, "Qtd", minval=1,                              group=grp_bl, inline="ev1")
+ev1_p   = input.price(0.0, "Preço",                                  group=grp_bl, inline="ev1")
+
+ev2_t   = input.time(timestamp("2020-01-01T00:00"), "Ev2 Data/Hora", group=grp_bl, inline="ev2")
+ev2_act = input.string("Compra", "", options=["Compra","Venda"],     group=grp_bl, inline="ev2")
+ev2_qty = input.int(1, "Qtd", minval=1,                              group=grp_bl, inline="ev2")
+ev2_p   = input.price(0.0, "Preço",                                  group=grp_bl, inline="ev2")
+
+ev3_t   = input.time(timestamp("2020-01-01T00:00"), "Ev3 Data/Hora", group=grp_bl, inline="ev3")
+ev3_act = input.string("Compra", "", options=["Compra","Venda"],     group=grp_bl, inline="ev3")
+ev3_qty = input.int(1, "Qtd", minval=1,                              group=grp_bl, inline="ev3")
+ev3_p   = input.price(0.0, "Preço",                                  group=grp_bl, inline="ev3")
+
+ev4_t   = input.time(timestamp("2020-01-01T00:00"), "Ev4 Data/Hora", group=grp_bl, inline="ev4")
+ev4_act = input.string("Compra", "", options=["Compra","Venda"],     group=grp_bl, inline="ev4")
+ev4_qty = input.int(1, "Qtd", minval=1,                              group=grp_bl, inline="ev4")
+ev4_p   = input.price(0.0, "Preço",                                  group=grp_bl, inline="ev4")
+
+ev5_t   = input.time(timestamp("2020-01-01T00:00"), "Ev5 Data/Hora", group=grp_bl, inline="ev5")
+ev5_act = input.string("Compra", "", options=["Compra","Venda"],     group=grp_bl, inline="ev5")
+ev5_qty = input.int(1, "Qtd", minval=1,                              group=grp_bl, inline="ev5")
+ev5_p   = input.price(0.0, "Preço",                                  group=grp_bl, inline="ev5")
+
+ev6_t   = input.time(timestamp("2020-01-01T00:00"), "Ev6 Data/Hora", group=grp_bl, inline="ev6")
+ev6_act = input.string("Compra", "", options=["Compra","Venda"],     group=grp_bl, inline="ev6")
+ev6_qty = input.int(1, "Qtd", minval=1,                              group=grp_bl, inline="ev6")
+ev6_p   = input.price(0.0, "Preço",                                  group=grp_bl, inline="ev6")
+
+ev7_t   = input.time(timestamp("2020-01-01T00:00"), "Ev7 Data/Hora", group=grp_bl, inline="ev7")
+ev7_act = input.string("Compra", "", options=["Compra","Venda"],     group=grp_bl, inline="ev7")
+ev7_qty = input.int(1, "Qtd", minval=1,                              group=grp_bl, inline="ev7")
+ev7_p   = input.price(0.0, "Preço",                                  group=grp_bl, inline="ev7")
+
+ev8_t   = input.time(timestamp("2020-01-01T00:00"), "Ev8 Data/Hora", group=grp_bl, inline="ev8")
+ev8_act = input.string("Compra", "", options=["Compra","Venda"],     group=grp_bl, inline="ev8")
+ev8_qty = input.int(1, "Qtd", minval=1,                              group=grp_bl, inline="ev8")
+ev8_p   = input.price(0.0, "Preço",                                  group=grp_bl, inline="ev8")
+
+ev9_t   = input.time(timestamp("2020-01-01T00:00"), "Ev9 Data/Hora", group=grp_bl, inline="ev9")
+ev9_act = input.string("Compra", "", options=["Compra","Venda"],     group=grp_bl, inline="ev9")
+ev9_qty = input.int(1, "Qtd", minval=1,                              group=grp_bl, inline="ev9")
+ev9_p   = input.price(0.0, "Preço",                                  group=grp_bl, inline="ev9")
+
+ev10_t   = input.time(timestamp("2020-01-01T00:00"), "Ev10 Data/Hora", group=grp_bl, inline="ev10")
+ev10_act = input.string("Compra", "", options=["Compra","Venda"],     group=grp_bl, inline="ev10")
+ev10_qty = input.int(1, "Qtd", minval=1,                              group=grp_bl, inline="ev10")
+ev10_p   = input.price(0.0, "Preço",                                  group=grp_bl, inline="ev10")
+
+// -------- Agregações --------
+f_qty_if(target_act, ev_act, qty, p) => (ev_act == target_act and p > 0) ? qty : 0
+f_ntl_if(target_act, ev_act, qty, p) => (ev_act == target_act and p > 0) ? qty * p : 0.0
+
+total_bought =
+     f_qty_if("Compra", ev1_act, ev1_qty, ev1_p) + f_qty_if("Compra", ev2_act, ev2_qty, ev2_p) +
+     f_qty_if("Compra", ev3_act, ev3_qty, ev3_p) + f_qty_if("Compra", ev4_act, ev4_qty, ev4_p) +
+     f_qty_if("Compra", ev5_act, ev5_qty, ev5_p) + f_qty_if("Compra", ev6_act, ev6_qty, ev6_p) +
+     f_qty_if("Compra", ev7_act, ev7_qty, ev7_p) + f_qty_if("Compra", ev8_act, ev8_qty, ev8_p) +
+     f_qty_if("Compra", ev9_act, ev9_qty, ev9_p) + f_qty_if("Compra", ev10_act, ev10_qty, ev10_p)
+
+total_sold =
+     f_qty_if("Venda", ev1_act, ev1_qty, ev1_p) + f_qty_if("Venda", ev2_act, ev2_qty, ev2_p) +
+     f_qty_if("Venda", ev3_act, ev3_qty, ev3_p) + f_qty_if("Venda", ev4_act, ev4_qty, ev4_p) +
+     f_qty_if("Venda", ev5_act, ev5_qty, ev5_p) + f_qty_if("Venda", ev6_act, ev6_qty, ev6_p) +
+     f_qty_if("Venda", ev7_act, ev7_qty, ev7_p) + f_qty_if("Venda", ev8_act, ev8_qty, ev8_p) +
+     f_qty_if("Venda", ev9_act, ev9_qty, ev9_p) + f_qty_if("Venda", ev10_act, ev10_qty, ev10_p)
+
+notional_bought =
+     f_ntl_if("Compra", ev1_act, ev1_qty, ev1_p) + f_ntl_if("Compra", ev2_act, ev2_qty, ev2_p) +
+     f_ntl_if("Compra", ev3_act, ev3_qty, ev3_p) + f_ntl_if("Compra", ev4_act, ev4_qty, ev4_p) +
+     f_ntl_if("Compra", ev5_act, ev5_qty, ev5_p) + f_ntl_if("Compra", ev6_act, ev6_qty, ev6_p) +
+     f_ntl_if("Compra", ev7_act, ev7_qty, ev7_p) + f_ntl_if("Compra", ev8_act, ev8_qty, ev8_p) +
+     f_ntl_if("Compra", ev9_act, ev9_qty, ev9_p) + f_ntl_if("Compra", ev10_act, ev10_qty, ev10_p)
+
+notional_sold =
+     f_ntl_if("Venda", ev1_act, ev1_qty, ev1_p) + f_ntl_if("Venda", ev2_act, ev2_qty, ev2_p) +
+     f_ntl_if("Venda", ev3_act, ev3_qty, ev3_p) + f_ntl_if("Venda", ev4_act, ev4_qty, ev4_p) +
+     f_ntl_if("Venda", ev5_act, ev5_qty, ev5_p) + f_ntl_if("Venda", ev6_act, ev6_qty, ev6_p) +
+     f_ntl_if("Venda", ev7_act, ev7_qty, ev7_p) + f_ntl_if("Venda", ev8_act, ev8_qty, ev8_p) +
+     f_ntl_if("Venda", ev9_act, ev9_qty, ev9_p) + f_ntl_if("Venda", ev10_act, ev10_qty, ev10_p)
+
+avg_buy  = total_bought > 0 ? notional_bought / total_bought : 0.0
+avg_sell = total_sold   > 0 ? notional_sold   / total_sold   : 0.0
+
+net_pos    = total_bought - total_sold   // positive = LONG, negative = SHORT, 0 = FLAT
+is_long    = net_pos > 0
+is_short   = net_pos < 0
+closed_qty = math.min(total_bought, total_sold)
+
+// P&L realizado sobre a parte fechada (uses weighted avg)
+realized_pnl_pts = (avg_buy > 0 and avg_sell > 0 and closed_qty > 0) ? (avg_sell - avg_buy) * closed_qty : 0.0
+realized_pnl_rs  = realized_pnl_pts * 0.20
+
+// P&L aberto: LONG usa avg_buy como custo, SHORT usa avg_sell
+open_pnl_pts = is_long  ? (close - avg_buy)  * net_pos      :
+              (is_short ? (avg_sell - close) * (-net_pos)   : 0.0)
+open_pnl_rs  = open_pnl_pts * 0.20
+
+grand_total_pts = realized_pnl_pts + open_pnl_pts
+grand_total_rs  = realized_pnl_rs  + open_pnl_rs
+
+// -------- Tabela BLOTTER --------
+var table tbl = table.new(position.middle_right, 2, 10, border_width=1)
+
+if barstate.islast and show_bl_tb
+    hdr    = color.new(color.blue, 25)
+    txt    = color.white
+    cor_r  = realized_pnl_pts >= 0 ? color.new(color.green, 55) : color.new(color.red, 55)
+    cor_o  = open_pnl_pts     >= 0 ? color.new(color.green, 55) : color.new(color.red, 55)
+    cor_t  = grand_total_pts  >= 0 ? color.new(color.green, 30) : color.new(color.red, 30)
+    dir_lbl = is_long  ? "LONG "  + str.tostring(net_pos)  + "c" :
+              (is_short ? "SHORT " + str.tostring(-net_pos) + "c" : "FLAT")
+
+    table.cell(tbl, 0, 0, "BLOTTER",         bgcolor=hdr, text_color=txt)
+    table.cell(tbl, 1, 0, dir_lbl,           bgcolor=hdr, text_color=txt)
+    table.cell(tbl, 0, 1, "Compras totais",  text_color=txt)
+    table.cell(tbl, 1, 1, str.tostring(total_bought) + "c" + (avg_buy > 0 ? " @ " + str.tostring(avg_buy, "#.#") : ""), text_color=txt)
+    table.cell(tbl, 0, 2, "Vendas totais",   text_color=txt)
+    table.cell(tbl, 1, 2, str.tostring(total_sold) + "c" + (avg_sell > 0 ? " @ " + str.tostring(avg_sell, "#.#") : ""), text_color=txt)
+    table.cell(tbl, 0, 3, "Fechados",        text_color=txt)
+    table.cell(tbl, 1, 3, str.tostring(closed_qty) + "c", text_color=txt)
+    table.cell(tbl, 0, 4, "Posição aberta",  text_color=txt)
+    table.cell(tbl, 1, 4, dir_lbl, text_color=txt)
+    table.cell(tbl, 0, 5, "Preço atual",     text_color=txt)
+    table.cell(tbl, 1, 5, str.tostring(close, "#.#"), text_color=txt)
+    table.cell(tbl, 0, 6, "P&L realizado",   bgcolor=cor_r, text_color=txt)
+    table.cell(tbl, 1, 6, str.tostring(realized_pnl_pts, "#") + "pts · R$" + str.tostring(realized_pnl_rs, "#.##"), bgcolor=cor_r, text_color=txt)
+    table.cell(tbl, 0, 7, "P&L aberto",      bgcolor=cor_o, text_color=txt)
+    table.cell(tbl, 1, 7, str.tostring(open_pnl_pts, "#") + "pts · R$" + str.tostring(open_pnl_rs, "#.##"), bgcolor=cor_o, text_color=txt)
+    table.cell(tbl, 0, 8, "TOTAL",           bgcolor=cor_t, text_color=txt)
+    table.cell(tbl, 1, 8, str.tostring(grand_total_pts, "#") + "pts · R$" + str.tostring(grand_total_rs, "#.##"), bgcolor=cor_t, text_color=txt)
+    table.cell(tbl, 0, 9, "Eventos",         text_color=txt)
+    table.cell(tbl, 1, 9, "Compra=azul · Venda=laranja", text_color=txt)
+
+// -------- Desenha setas por evento --------
+// Compra = azul (▲ BUY abaixo do candle)
+// Venda  = laranja (▼ SELL acima do candle)
+f_draw_ev(idx, et, act, qty, p) =>
+    if p > 0 and time <= et and time_close > et
+        is_buy = act == "Compra"
+        cor  = is_buy ? color.new(color.blue, 0) : color.new(color.orange, 0)
+        seta = is_buy ? "▲ BUY" : "▼ SELL"
+        stl  = is_buy ? label.style_label_down : label.style_label_up
+        label.new(bar_index, p,
+             "Ev" + str.tostring(idx) + " " + seta + " " + str.tostring(qty) + "c @ " + str.tostring(p, "#.#"),
+             color=cor, textcolor=color.white, style=stl, size=size.small)
+
+if show_bl
+    f_draw_ev(1,  ev1_t,  ev1_act,  ev1_qty,  ev1_p)
+    f_draw_ev(2,  ev2_t,  ev2_act,  ev2_qty,  ev2_p)
+    f_draw_ev(3,  ev3_t,  ev3_act,  ev3_qty,  ev3_p)
+    f_draw_ev(4,  ev4_t,  ev4_act,  ev4_qty,  ev4_p)
+    f_draw_ev(5,  ev5_t,  ev5_act,  ev5_qty,  ev5_p)
+    f_draw_ev(6,  ev6_t,  ev6_act,  ev6_qty,  ev6_p)
+    f_draw_ev(7,  ev7_t,  ev7_act,  ev7_qty,  ev7_p)
+    f_draw_ev(8,  ev8_t,  ev8_act,  ev8_qty,  ev8_p)
+    f_draw_ev(9,  ev9_t,  ev9_act,  ev9_qty,  ev9_p)
+    f_draw_ev(10, ev10_t, ev10_act, ev10_qty, ev10_p)
