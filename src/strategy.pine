@@ -1,13 +1,19 @@
 // @version=5
 // -----------------------------------------------------------------------------
-// Eixo Estratégico — WIN Day Trade | Strategy Backtestable
+// Eixo Estratégico — WIN Day Trade | Strategy X/3 (v14 — 04/08/2026)
 // -----------------------------------------------------------------------------
 // APLICAR NO GRÁFICO DE 1 MINUTO DO ATIVO WIN.
-// Versão backtest: entra quando score >= min_score (default 2/4) e sai por scale-out em cada Fibo tocado.
-// Sizing por congruência: 5/10/15/20 contratos.
+// v14 alinhada à spec canônica (2026-08-04):
+//   - Estocástico LENTO (8,3) SMA duplo em todos os TFs
+//   - TRIX (9, MMA 3), DI+/DI- (8,8), ADX (8,8) — todos em todos os TFs
+//   - Score X/3 por TF: Estoc + TRIX + DI±  (ADX fora)
+//   - Sizing 5 × N_TFs com 3/3 (mín 5, máx 20)
+//   - Gate v14: 2º toque em Fibo + candle fecha na direção → entra na abertura do seguinte
+//   - MACD 60m (12,26,9) filtro contextual opcional
+//   - Sem anti_faca, sem adx_bonus (removidos)
 // -----------------------------------------------------------------------------
 
-strategy("Eixo WIN — Strategy X/4", overlay=true,
+strategy("Eixo WIN — Strategy X/3 (v14)", overlay=true,
      initial_capital=100000,
      default_qty_type=strategy.fixed,
      default_qty_value=1,
@@ -20,16 +26,11 @@ strategy("Eixo WIN — Strategy X/4", overlay=true,
 
 // ============================== PARÂMETROS ==================================
 tol_pct    = input.float(0.05, "Tolerância de toque (%)",    minval=0.01, step=0.01)
-cross_win  = input.int(3, "Janela de iniciação (candles)",  minval=1, maxval=10)
 gap_bars   = input.int(3, "Gap mínimo entre eventos",       minval=1, maxval=20)
 reset_gap  = input.int(15, "Reset contador após N candles sem tocar", minval=3, maxval=100)
-adx_min    = input.float(25.0, "ADX mín. congruência TF sup", step=1)
-min_extras       = input.int(1, "Mín. confirmações (Estoc 1m / TRIX 5m)", minval=1, maxval=2)
 max_gap_touches  = input.int(10, "Máx. candles entre 1º e 2º toque", minval=2, maxval=50)
-wait_after_touch = input.int(1, "Janela pra confirmação após 2º toque (candles)", minval=1, maxval=30)
-adx_bonus        = input.int(5, "Bônus de contratos com ADX 5m ativo", minval=0, maxval=10)
-sizing_cap = input.int(20, "Cap máximo de contratos (4 TFs × 5)", minval=5, maxval=100)
-anti_faca  = input.bool(true, "Filtro anti-tendência (bloqueia se 15/30/60 em 3/3 contra)", tooltip="Bloqueia BUY se algum TF superior (15m/30m/60m) estiver em 3/3 SELL. Idem SELL. Evita pegar faca caindo.")
+sizing_cap = input.int(20, "Cap máximo de contratos (5 × 4 TFs)", minval=5, maxval=100)
+use_macd60_filter = input.bool(false, "Filtro MACD 60m (bloqueia trade contra o estado)", tooltip="Se ligado, só entra COMPRA quando MACD 60m está em compra (macd > sinal), e só entra VENDA quando MACD 60m está em venda. Default desligado — MACD é só contextual.")
 
 session_end_h = input.int(17, "Hora limite pra abrir posição",  minval=10, maxval=17)
 session_end_m = input.int(30, "Minuto limite pra abrir",         minval=0,  maxval=59)
@@ -251,7 +252,7 @@ mid_second_touch = tocou(umid) and mide == 2
 second_upper = mid_second_touch or (tocou(u0) and u0e == 2) or (tocou(u50) and u50e == 2) or (tocou(u100) and u100e == 2) or (tocou(u150) and u150e == 2) or (tocou(u200) and u200e == 2) or (tocou(u250) and u250e == 2) or (tocou(u300) and u300e == 2) or (tocou(u350) and u350e == 2) or (tocou(u400) and u400e == 2) or (tocou(u450) and u450e == 2)
 second_lower = mid_second_touch or (tocou(l0) and l0e == 2) or (tocou(l50) and l50e == 2) or (tocou(l100) and l100e == 2) or (tocou(l150) and l150e == 2) or (tocou(l200) and l200e == 2) or (tocou(l250) and l250e == 2) or (tocou(l300) and l300e == 2) or (tocou(l350) and l350e == 2) or (tocou(l400) and l400e == 2) or (tocou(l450) and l450e == 2)
 
-// ============================== INDICADORES =================================
+// ============================== INDICADORES (v14) ===========================
 // TRIX manual (Pine v5 não tem ta.trix nativo)
 trix_calc(src, len) =>
     e1 = ta.ema(src, len)
@@ -259,179 +260,111 @@ trix_calc(src, len) =>
     e3 = ta.ema(e2, len)
     ta.roc(e3, 1)
 
-// Estoc 1m — evento e "barssince cross"
-stoch_k = ta.stoch(close, high, low, 5)
-stoch_d = ta.sma(stoch_k, 3)
-stoch_cross_up = ta.crossover(stoch_k, stoch_d)
-stoch_cross_dn = ta.crossunder(stoch_k, stoch_d)
-stoch_bars_up  = ta.barssince(stoch_cross_up)
-stoch_bars_dn  = ta.barssince(stoch_cross_dn)
+// Estocástico LENTO (K=8, D=3, SMA duplo) — spec v14
+stoch_slow(k_len, d_len) =>
+    raw_k = ta.stoch(close, high, low, k_len)
+    smooth_k = ta.sma(raw_k, d_len)
+    smooth_d = ta.sma(smooth_k, d_len)
+    [smooth_k, smooth_d]
 
-// TRIX 5m + ADX 5m + DMI 5m via helper (Pine v5 exige função pra tuple no request.security)
-get_5m() =>
-    tv = trix_calc(close, 9)
-    tm = ta.sma(tv, 4)
-    tbu = ta.barssince(ta.crossover(tv, tm))
-    tbd = ta.barssince(ta.crossunder(tv, tm))
-    [dp, dn, av] = ta.dmi(8, 8)
-    up30r = ta.barssince(ta.crossover(av, 30)) < 3
-    band  = av > 70 and av < 80 and av < av[1]
-    [tbu, tbd, av, dp, dn, up30r, band]
-
-[trix_bars_up_5m, trix_bars_dn_5m, adx5, dmp5, dmn5, adx_up_30_recent, adx_band_dn] = request.security(syminfo.tickerid, "5", get_5m(), lookahead=barmerge.lookahead_off)
-adx_intensifier = adx_up_30_recent or adx_band_dn
-
-// TRIX 1m — SAÍDA (2º cruzamento contra o trade)
+// TRIX 1m — usado só pra saída antecipada (2º cruzamento contra o trade)
 trix1m_val = trix_calc(close, 9)
-trix1m_ma  = ta.sma(trix1m_val, 4)
+trix1m_ma  = ta.sma(trix1m_val, 3)   // v14: MMA 3
 trix1m_cross_up = ta.crossover(trix1m_val, trix1m_ma)
 trix1m_cross_dn = ta.crossunder(trix1m_val, trix1m_ma)
 
-// ============================== CONGRUÊNCIA MTF =============================
-get_htf() =>
-    [dp, dn, av] = ta.dmi(8, 8)
-    up30r = ta.barssince(ta.crossover(av, 30)) < 3
-    band  = av > 70 and av < 80 and av < av[1]
-    active = up30r or band
-    [dp, dn, av, active]
-
-[dip15, dim15, adx15, act15] = request.security(syminfo.tickerid, "15", get_htf())
-[dip30, dim30, adx30, act30] = request.security(syminfo.tickerid, "30", get_htf())
-[dip60, dim60, adx60, act60] = request.security(syminfo.tickerid, "60", get_htf())
-
-// Score de direção por TF (Est + TRIX + DMI, sem ADX) — pra alimentar anti-faca
-get_htf_dir() =>
-    k = ta.stoch(close, high, low, 5)
+// ============================== INDICADORES POR TF (v14) ====================
+// Todos os TFs (5/15/30/60) usam: Est Lento (8,3) + TRIX (9, MMA 3) + DI± (8,8) + ADX (8,8)
+// Score = 3 (Est+TRIX+DI). ADX = intensidade (não pontua).
+get_htf_v14() =>
+    raw_k = ta.stoch(close, high, low, 8)
+    k = ta.sma(raw_k, 3)
     d = ta.sma(k, 3)
     sb = k > d
     ss = k < d
     tv = trix_calc(close, 9)
-    tm = ta.sma(tv, 4)
+    tm = ta.sma(tv, 3)
     tb = tv > tm
     ts = tv < tm
-    [dp, dn, _av] = ta.dmi(8, 8)
+    [dp, dn, av] = ta.dmi(8, 8)
     db = dp > dn
     ds = dn > dp
-    [sb, ss, tb, ts, db, ds]
+    adx_active = av > 30 or (av > 70 and av < 80 and av < av[1])
+    [sb, ss, tb, ts, db, ds, adx_active]
 
-[s15b_sb, s15b_ss, s15b_tb, s15b_ts, s15b_db, s15b_ds] = request.security(syminfo.tickerid, "15", get_htf_dir())
-[s30b_sb, s30b_ss, s30b_tb, s30b_ts, s30b_db, s30b_ds] = request.security(syminfo.tickerid, "30", get_htf_dir())
-[s60b_sb, s60b_ss, s60b_tb, s60b_ts, s60b_db, s60b_ds] = request.security(syminfo.tickerid, "60", get_htf_dir())
+[s5b, s5s, t5b, t5s, d5b, d5s, adx5_active]     = request.security(syminfo.tickerid, "5",  get_htf_v14(), lookahead=barmerge.lookahead_off)
+[s15b, s15s, t15b, t15s, d15b, d15s, adx15_active] = request.security(syminfo.tickerid, "15", get_htf_v14(), lookahead=barmerge.lookahead_off)
+[s30b, s30s, t30b, t30s, d30b, d30s, adx30_active] = request.security(syminfo.tickerid, "30", get_htf_v14(), lookahead=barmerge.lookahead_off)
+[s60b, s60s, t60b, t60s, d60b, d60s, adx60_active] = request.security(syminfo.tickerid, "60", get_htf_v14(), lookahead=barmerge.lookahead_off)
 
-score_15m_buy_s  = (s15b_sb ? 1 : 0) + (s15b_tb ? 1 : 0) + (s15b_db ? 1 : 0)
-score_15m_sell_s = (s15b_ss ? 1 : 0) + (s15b_ts ? 1 : 0) + (s15b_ds ? 1 : 0)
-score_30m_buy_s  = (s30b_sb ? 1 : 0) + (s30b_tb ? 1 : 0) + (s30b_db ? 1 : 0)
-score_30m_sell_s = (s30b_ss ? 1 : 0) + (s30b_ts ? 1 : 0) + (s30b_ds ? 1 : 0)
-score_60m_buy_s  = (s60b_sb ? 1 : 0) + (s60b_tb ? 1 : 0) + (s60b_db ? 1 : 0)
-score_60m_sell_s = (s60b_ss ? 1 : 0) + (s60b_ts ? 1 : 0) + (s60b_ds ? 1 : 0)
+// Score X/3 por TF (Est + TRIX + DI, sem ADX)
+score_5m_buy   = (s5b  ? 1 : 0) + (t5b  ? 1 : 0) + (d5b  ? 1 : 0)
+score_5m_sell  = (s5s  ? 1 : 0) + (t5s  ? 1 : 0) + (d5s  ? 1 : 0)
+score_15m_buy  = (s15b ? 1 : 0) + (t15b ? 1 : 0) + (d15b ? 1 : 0)
+score_15m_sell = (s15s ? 1 : 0) + (t15s ? 1 : 0) + (d15s ? 1 : 0)
+score_30m_buy  = (s30b ? 1 : 0) + (t30b ? 1 : 0) + (d30b ? 1 : 0)
+score_30m_sell = (s30s ? 1 : 0) + (t30s ? 1 : 0) + (d30s ? 1 : 0)
+score_60m_buy  = (s60b ? 1 : 0) + (t60b ? 1 : 0) + (d60b ? 1 : 0)
+score_60m_sell = (s60s ? 1 : 0) + (t60s ? 1 : 0) + (d60s ? 1 : 0)
 
-cong5_buy   = adx_intensifier and dmp5  > dmn5
-cong15_buy  = act15 and dip15 > dim15
-cong30_buy  = act30 and dip30 > dim30
-cong60_buy  = act60 and dip60 > dim60
-cong5_sell  = adx_intensifier and dmn5  > dmp5
-cong15_sell = act15 and dim15 > dip15
-cong30_sell = act30 and dim30 > dip30
-cong60_sell = act60 and dim60 > dip60
+// "TF alinhado" = score 3/3 (todos os 3 indicadores na mesma direção)
+tf5_buy_aligned  = score_5m_buy  == 3
+tf15_buy_aligned = score_15m_buy == 3
+tf30_buy_aligned = score_30m_buy == 3
+tf60_buy_aligned = score_60m_buy == 3
+tf5_sell_aligned  = score_5m_sell  == 3
+tf15_sell_aligned = score_15m_sell == 3
+tf30_sell_aligned = score_30m_sell == 3
+tf60_sell_aligned = score_60m_sell == 3
 
-cong44_buy_score  = (cong5_buy  ? 1 : 0) + (cong15_buy  ? 1 : 0) + (cong30_buy  ? 1 : 0) + (cong60_buy  ? 1 : 0)
-cong44_sell_score = (cong5_sell ? 1 : 0) + (cong15_sell ? 1 : 0) + (cong30_sell ? 1 : 0) + (cong60_sell ? 1 : 0)
+n_tfs_buy_3of3  = (tf5_buy_aligned  ? 1 : 0) + (tf15_buy_aligned  ? 1 : 0) + (tf30_buy_aligned  ? 1 : 0) + (tf60_buy_aligned  ? 1 : 0)
+n_tfs_sell_3of3 = (tf5_sell_aligned ? 1 : 0) + (tf15_sell_aligned ? 1 : 0) + (tf30_sell_aligned ? 1 : 0) + (tf60_sell_aligned ? 1 : 0)
 
-// Score MTF antigo (só 15+30+60) — mantido para o sizing
-cong_buy_score  = (cong15_buy  ? 1 : 0) + (cong30_buy  ? 1 : 0) + (cong60_buy  ? 1 : 0)
-cong_sell_score = (cong15_sell ? 1 : 0) + (cong30_sell ? 1 : 0) + (cong60_sell ? 1 : 0)
+// MACD 60m — filtro contextual (opcional via input use_macd60_filter)
+get_macd60() =>
+    [macd_l, sig_l, _hist] = ta.macd(close, 12, 26, 9)
+    macd_l > sig_l
+macd60_state_buy = request.security(syminfo.tickerid, "60", get_macd60(), lookahead=barmerge.lookahead_off)
 
-// ============================== GATILHO (opção B — global por direção) =====
-// Estado 1: sem setup → aguarda 1º toque em algum suporte
-// Estado 2: 1º toque → aguarda 2º toque no mesmo nível em ≤ max_gap_touches
-// Estado 3: 2º toque → aguarda cross Estoc/TRIX em ≤ wait_after_touch pós 2º
-//           (cross entre 1º e 2º também vale)
-// Após disparar: reset total
+// ============================== GATE v14 ====================================
+// Regra: 2ª batida em Fibo E candle fecha ACIMA (buy) ou ABAIXO (sell) do nível
+//        → entrada na ABERTURA do candle SEGUINTE.
+// Filtro MACD 60m opcional: só entra na direção do estado atual do MACD 60m.
 
-// Detect 1º toque em algum nível (usa _e == 1)
-// MID como âncora dual: 1º toque no midpoint conta pra ambas as direções
-mid_first_now = tocou(umid) and mide == 1
-first_lower_now = mid_first_now or (tocou(l0) and l0e == 1) or (tocou(l50) and l50e == 1) or (tocou(l100) and l100e == 1) or (tocou(l150) and l150e == 1) or (tocou(l200) and l200e == 1) or (tocou(l250) and l250e == 1) or (tocou(l300) and l300e == 1) or (tocou(l350) and l350e == 1) or (tocou(l400) and l400e == 1) or (tocou(l450) and l450e == 1)
-first_upper_now = mid_first_now or (tocou(u0) and u0e == 1) or (tocou(u50) and u50e == 1) or (tocou(u100) and u100e == 1) or (tocou(u150) and u150e == 1) or (tocou(u200) and u200e == 1) or (tocou(u250) and u250e == 1) or (tocou(u300) and u300e == 1) or (tocou(u350) and u350e == 1) or (tocou(u400) and u400e == 1) or (tocou(u450) and u450e == 1)
+buy_gate_at(level, e) => tocou(level) and e == 2 and close > level
+sell_gate_at(level, e) => tocou(level) and e == 2 and close < level
 
-var int buy_first_touch_ago   = 999999
-var int buy_second_touch_ago  = 999999
-var int sell_first_touch_ago  = 999999
-var int sell_second_touch_ago = 999999
+buy_gate_armed = buy_gate_at(umid, mide) or
+   buy_gate_at(l0, l0e)   or buy_gate_at(l50, l50e)   or buy_gate_at(l100, l100e) or
+   buy_gate_at(l150, l150e) or buy_gate_at(l200, l200e) or buy_gate_at(l250, l250e) or
+   buy_gate_at(l300, l300e) or buy_gate_at(l350, l350e) or buy_gate_at(l400, l400e) or
+   buy_gate_at(l450, l450e)
 
-if is_new_day
-    buy_first_touch_ago   := 999999
-    buy_second_touch_ago  := 999999
-    sell_first_touch_ago  := 999999
-    sell_second_touch_ago := 999999
+sell_gate_armed = sell_gate_at(umid, mide) or
+   sell_gate_at(u0, u0e)   or sell_gate_at(u50, u50e)   or sell_gate_at(u100, u100e) or
+   sell_gate_at(u150, u150e) or sell_gate_at(u200, u200e) or sell_gate_at(u250, u250e) or
+   sell_gate_at(u300, u300e) or sell_gate_at(u350, u350e) or sell_gate_at(u400, u400e) or
+   sell_gate_at(u450, u450e)
 
-buy_first_touch_ago   := buy_first_touch_ago   + 1
-buy_second_touch_ago  := buy_second_touch_ago  + 1
-sell_first_touch_ago  := sell_first_touch_ago  + 1
-sell_second_touch_ago := sell_second_touch_ago + 1
-
-if first_lower_now and buy_first_touch_ago > max_gap_touches
-    buy_first_touch_ago  := 0
-    buy_second_touch_ago := 999999
-if first_upper_now and sell_first_touch_ago > max_gap_touches
-    sell_first_touch_ago  := 0
-    sell_second_touch_ago := 999999
-
-if second_lower and buy_first_touch_ago <= max_gap_touches and buy_second_touch_ago > wait_after_touch
-    buy_second_touch_ago := 0
-if second_upper and sell_first_touch_ago <= max_gap_touches and sell_second_touch_ago > wait_after_touch
-    sell_second_touch_ago := 0
-
-buy_touch_window_open  = buy_second_touch_ago  <= wait_after_touch
-sell_touch_window_open = sell_second_touch_ago <= wait_after_touch
-
-buy_stoch_valid  = buy_touch_window_open  and stoch_bars_up   < buy_first_touch_ago
-buy_trix_valid   = buy_touch_window_open  and trix_bars_up_5m < buy_first_touch_ago
-sell_stoch_valid = sell_touch_window_open and stoch_bars_dn   < sell_first_touch_ago
-sell_trix_valid  = sell_touch_window_open and trix_bars_dn_5m < sell_first_touch_ago
-
-buy_extras_score  = (buy_stoch_valid  ? 1 : 0) + (buy_trix_valid  ? 1 : 0)
-sell_extras_score = (sell_stoch_valid ? 1 : 0) + (sell_trix_valid ? 1 : 0)
-
-buy_score  = (second_lower ? 1 : 0) + buy_extras_score
-sell_score = (second_upper ? 1 : 0) + sell_extras_score
-
-// Filtro anti-tendência: bloqueia entrada se qualquer TF superior (15/30/60)
-// está em score >= 3 (todos 3 indicadores) na direção OPOSTA.
-anti_faca_buy_ok  = not anti_faca or (score_15m_sell_s < 3 and score_30m_sell_s < 3 and score_60m_sell_s < 3)
-anti_faca_sell_ok = not anti_faca or (score_15m_buy_s  < 3 and score_30m_buy_s  < 3 and score_60m_buy_s  < 3)
-
-buy_signal_hit  = buy_touch_window_open  and buy_extras_score  >= min_extras and anti_faca_buy_ok
-sell_signal_hit = sell_touch_window_open and sell_extras_score >= min_extras and anti_faca_sell_ok
-
-// SINAL PREMIUM 4/4 (paridade com indicator): gatilho X/2 + congruência total 4 TFs
-buy_signal_44  = buy_signal_hit  and cong44_buy_score  == 4
-sell_signal_44 = sell_signal_hit and cong44_sell_score == 4
-
-if buy_signal_hit
-    buy_first_touch_ago  := 999999
-    buy_second_touch_ago := 999999
-if sell_signal_hit
-    sell_first_touch_ago  := 999999
-    sell_second_touch_ago := 999999
+// Sinal v14 = fires no candle seguinte (na abertura)
+macd60_buy_ok  = not use_macd60_filter or macd60_state_buy
+macd60_sell_ok = not use_macd60_filter or not macd60_state_buy
+buy_signal_hit  = buy_gate_armed[1]  and macd60_buy_ok
+sell_signal_hit = sell_gate_armed[1] and macd60_sell_ok
 
 // ============================== SESSION FILTER ==============================
 in_entry_window = (hour < session_end_h) or (hour == session_end_h and minute < session_end_m)
 in_eod_window   = (hour > force_close_h) or (hour == force_close_h and minute >= force_close_m)
 
-// ============================== SIZING ======================================
-// 5 contratos por TF alinhado na direção (cong44_*_score já é N_TFs 0-4).
-// Mínimo 5 (entra mesmo sem congruência), máximo = sizing_cap (default 20).
+// ============================== SIZING v14 ==================================
+// 5 contratos × N_TFs com 3/3 (mín 5, máx 20).
 sizing_by_tfs(n) => math.max(5, math.min(sizing_cap, 5 * n))
 
 // ============================== ENTRADAS ====================================
-// 10 targets iguais para todos os cong: 0, 50, 100, 150, 200, 250, 300, 350, 400, 450
-// qty por target = floor(total/10), min 1; T10 fecha o remainder.
-
+// 10 alvos Fibo iguais + stop = fib_range × 0.5 do preço de entrada.
 if buy_signal_hit and in_entry_window and strategy.position_size == 0 and has_base
-    qty_total = sizing_by_tfs(cong44_buy_score)
-    tag = buy_signal_44 ? "★4/4 " : ""
-    strategy.entry("Long", strategy.long, qty=qty_total, comment=tag + "Buy TFs=" + str.tostring(cong44_buy_score) + " qty=" + str.tostring(qty_total))
+    qty_total = sizing_by_tfs(n_tfs_buy_3of3)
+    strategy.entry("Long", strategy.long, qty=qty_total, comment="v14 Buy TFs3/3=" + str.tostring(n_tfs_buy_3of3) + " qty=" + str.tostring(qty_total))
     stop_price = close - fib_range * 0.5
     qty_t = math.max(1, int(math.floor(qty_total / 10.0)))
     strategy.exit("T1",  from_entry="Long", qty=qty_t, limit=lvl("upper",   0), stop=stop_price)
@@ -446,9 +379,8 @@ if buy_signal_hit and in_entry_window and strategy.position_size == 0 and has_ba
     strategy.exit("T10", from_entry="Long",            limit=lvl("upper", 450), stop=stop_price)
 
 if sell_signal_hit and in_entry_window and strategy.position_size == 0 and has_base
-    qty_total = sizing_by_tfs(cong44_sell_score)
-    tag = sell_signal_44 ? "★4/4 " : ""
-    strategy.entry("Short", strategy.short, qty=qty_total, comment=tag + "Sell TFs=" + str.tostring(cong44_sell_score) + " qty=" + str.tostring(qty_total))
+    qty_total = sizing_by_tfs(n_tfs_sell_3of3)
+    strategy.entry("Short", strategy.short, qty=qty_total, comment="v14 Sell TFs3/3=" + str.tostring(n_tfs_sell_3of3) + " qty=" + str.tostring(qty_total))
     stop_price = close + fib_range * 0.5
     qty_t = math.max(1, int(math.floor(qty_total / 10.0)))
     strategy.exit("T1",  from_entry="Short", qty=qty_t, limit=lvl("lower",   0), stop=stop_price)
