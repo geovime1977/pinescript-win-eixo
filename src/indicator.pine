@@ -1,6 +1,6 @@
 // @version=5
 // -----------------------------------------------------------------------------
-// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.15 — 05/08/2026)
+// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.16 — 05/08/2026)
 // -----------------------------------------------------------------------------
 // APLICAR ESTE INDICADOR NO GRÁFICO DE 1 MINUTO DO ATIVO WIN.
 // Timeframe operacional: 1min | Contexto: 5m + 15m + 30m + 60m
@@ -1423,30 +1423,33 @@ if barstate.islast and show_bl_tb
     table.cell(tbl, 0, 9, "Eventos",         text_color=txt)
     table.cell(tbl, 1, 9, "Compra=azul · Venda=laranja", text_color=txt)
 
-// -------- Desenha setas por evento --------
-// Compra (▲, cor azul) = ENTRADA se posição LONG → ancorada ABAIXO da linha do preço.
-// Venda  (▼, cor laranja) = SAÍDA se posição LONG → ancorada ACIMA da linha do preço.
-// Offset vertical em ATR pra separar entradas de saídas.
-// Offset horizontal por idx (+ 3*idx bars) pra espalhar múltiplos Ev.
-// Linha pontilhada conecta o candle real ao label pra manter referência.
+// -------- Desenha setas por evento (v14.16: 2 elementos por Ev) --------
+// (1) Marcador triangular PEQUENO no candle/preço exato — sem texto
+// (2) Label com texto detalhado LONGE do candle (offset 5+ATR crescente por idx)
+//     Compra vai ABAIXO do preço (entrada), Venda ACIMA (saída)
+// Linha pontilhada conecta o marker ao label pra rastreabilidade.
 f_draw_ev(idx, et, act, qty, p) =>
     if p > 0 and time <= et and time_close > et
         is_buy    = act == "Compra"
         cor       = is_buy ? c_ev_buy : c_ev_sell
         seta      = is_buy ? "▲" : "▼"
-        // Compra abaixo (entrada), Venda acima (saída) — offset vertical em ATR
-        y_off_atr = atr_lane * 1.2
-        y_anchor  = is_buy ? p - y_off_atr : p + y_off_atr
-        stl       = is_buy ? label.style_label_up : label.style_label_down
-        // Horizontal: Ev1=+3, Ev2=+6, ..., Ev10=+30 pra evitar sobreposição
-        x_anchor  = bar_index + 3 * idx
+
+        // (1) Marker triangular pequeno no candle exato (sem texto, visualmente limpo)
+        stl_mk    = is_buy ? label.style_triangleup : label.style_triangledown
+        label.new(bar_index, p, "", style=stl_mk, color=cor, size=size.tiny, yloc=yloc.price)
+
+        // (2) Label com texto MUITO LONGE do candle — vertical dominante, offset cresce com idx
+        //     Base 5×ATR + 0.8×ATR por índice pra estratificar labels verticalmente
+        y_off     = atr_lane * (5.0 + idx * 0.8)
+        y_anchor  = is_buy ? p - y_off : p + y_off
+        stl_txt   = is_buy ? label.style_label_up : label.style_label_down
+        x_anchor  = bar_index + 2  // apenas 2 barras à direita — não estica indefinido
         label.new(x_anchor, y_anchor,
              "Ev" + str.tostring(idx) + " " + seta + " " + str.tostring(qty) + "c @ " + str.tostring(p, "#.#"),
-             color=cor, textcolor=c_txt_light, style=stl, size=size.tiny)
-        // linha pontilhada do candle real até o preço na coluna do label
-        line.new(bar_index, p, x_anchor, p, color=color.new(cor, 40), style=line.style_dotted, width=1)
-        // e uma linha vertical curta ligando o preço à âncora do label
-        line.new(x_anchor, p, x_anchor, y_anchor, color=color.new(cor, 60), style=line.style_dotted, width=1)
+             color=cor, textcolor=c_txt_light, style=stl_txt, size=size.tiny)
+
+        // Linhas de conexão: marker → âncora do label
+        line.new(bar_index, p, x_anchor, y_anchor, color=color.new(cor, 40), style=line.style_dotted, width=1)
 
 if show_bl
     f_draw_ev(1,  ev1_t,  ev1_act,  ev1_qty,  ev1_p)
