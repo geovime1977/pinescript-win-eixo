@@ -1,6 +1,6 @@
 // @version=5
 // -----------------------------------------------------------------------------
-// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.12 — 05/08/2026)
+// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.13 — 05/08/2026)
 // -----------------------------------------------------------------------------
 // APLICAR ESTE INDICADOR NO GRÁFICO DE 1 MINUTO DO ATIVO WIN.
 // Timeframe operacional: 1min | Contexto: 5m + 15m + 30m + 60m
@@ -209,13 +209,13 @@ get_htf_states() =>
 // Filtro contextual — NÃO pontua no score MTF. Mostrado no gráfico como marcador
 // (tipo ADX) e no painel/rodapé com timestamp do último cruzamento.
 get_macd_60m() =>
-    [macd_l, sig_l, _hist] = ta.macd(close, 12, 26, 9)
+    [macd_l, sig_l, hist] = ta.macd(close, 12, 26, 9)
     m_up = ta.crossover(macd_l, sig_l)
     m_dn = ta.crossunder(macd_l, sig_l)
     m_state_b = macd_l > sig_l
-    [m_up, m_dn, m_state_b]
+    [m_up, m_dn, m_state_b, macd_l, sig_l, hist]
 
-[macd60_cross_up_raw, macd60_cross_dn_raw, macd60_state_buy] = request.security(syminfo.tickerid, "60", get_macd_60m(), lookahead=barmerge.lookahead_off)
+[macd60_cross_up_raw, macd60_cross_dn_raw, macd60_state_buy, macd60_val, macd60_sig, macd60_hist] = request.security(syminfo.tickerid, "60", get_macd_60m(), lookahead=barmerge.lookahead_off)
 // Anti-spam: request.security propaga o cross bool pra todos os 60 candles 1min
 // do mesmo período 60m. Só firamos na transição (primeiro candle 1m que vê o cross).
 macd60_cross_up = macd60_cross_up_raw and not macd60_cross_up_raw[1]
@@ -962,7 +962,11 @@ if show_panel and barstate.islast
     table.cell(rdp, 1, 4, "↑ " + fmt_time(last_t_macd60_up), text_size=size.tiny, text_color=color.new(color.green, 0))
     table.cell(rdp, 2, 4, "↓ " + fmt_time(last_t_macd60_dn), text_size=size.tiny, text_color=color.new(color.red, 0))
     table.cell(rdp, 3, 4, macd60_state_buy ? "estado: 🟢" : "estado: 🔴", text_size=size.tiny, text_color=(macd60_state_buy ? color.green : color.red))
-    table.cell(rdp, 4, 4, "12/26/9 close", text_size=size.tiny, text_color=color.white)
+    // MACD 60m valores numéricos ao vivo — histograma colorido, MACD/Signal no tooltip
+    macd60_hist_arr = macd60_hist >= 0 ? "▲" : "▼"
+    macd60_hist_cor = macd60_hist >= 0 ? color.new(color.green, 0) : color.new(color.red, 0)
+    macd60_tip = "MACD: " + str.tostring(macd60_val, "#.##") + "  |  Signal: " + str.tostring(macd60_sig, "#.##") + "  |  Hist = MACD − Signal  |  12/26/9 close"
+    table.cell(rdp, 4, 4, "H " + str.tostring(macd60_hist, "#.##") + " " + macd60_hist_arr + " (M " + str.tostring(macd60_val, "#.#") + " / S " + str.tostring(macd60_sig, "#.#") + ")", text_size=size.tiny, text_color=macd60_hist_cor, tooltip=macd60_tip)
     // linha legenda das cores
     table.cell(rdp, 0, 5, "Legenda",     bgcolor=color.new(color.gray, 40), text_color=color.white, text_size=size.tiny)
     table.cell(rdp, 1, 5, "3/3=amarelo", text_size=size.tiny, text_color=color.yellow)
@@ -1402,17 +1406,21 @@ if barstate.islast and show_bl_tb
     table.cell(tbl, 1, 9, "Compra=azul · Venda=laranja", text_color=txt)
 
 // -------- Desenha setas por evento --------
-// Compra = azul (▲ BUY abaixo do candle)
-// Venda  = laranja (▼ SELL acima do candle)
+// Compra = azul (label diagonal lower_right — abaixo à direita da barra)
+// Venda  = laranja (label diagonal upper_right — acima à direita da barra)
+// Diagonal + offset horizontal (+2 bars) evita sobrepor MTF combos e ADX que
+// ficam nas lanes verticais direto abaixo/acima do candle.
 f_draw_ev(idx, et, act, qty, p) =>
     if p > 0 and time <= et and time_close > et
         is_buy = act == "Compra"
         cor  = is_buy ? color.new(color.blue, 0) : color.new(color.orange, 0)
-        seta = is_buy ? "▲ BUY" : "▼ SELL"
-        stl  = is_buy ? label.style_label_down : label.style_label_up
-        label.new(bar_index, p,
+        seta = is_buy ? "▲" : "▼"
+        stl  = is_buy ? label.style_label_lower_right : label.style_label_upper_right
+        label.new(bar_index + 2, p,
              "Ev" + str.tostring(idx) + " " + seta + " " + str.tostring(qty) + "c @ " + str.tostring(p, "#.#"),
-             color=cor, textcolor=color.white, style=stl, size=size.small)
+             color=cor, textcolor=color.white, style=stl, size=size.tiny)
+        // linha fina do candle real ao label pra manter a referência
+        line.new(bar_index, p, bar_index + 2, p, color=color.new(cor, 60), style=line.style_dotted, width=1)
 
 if show_bl
     f_draw_ev(1,  ev1_t,  ev1_act,  ev1_qty,  ev1_p)
