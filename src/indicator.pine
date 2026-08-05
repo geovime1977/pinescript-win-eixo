@@ -34,7 +34,7 @@ adx_min   = input.float(25.0, "ADX mínimo pra congruência TF sup.", group=grpS
 sig_cooldown     = input.int(5, "Cooldown entre sinais (candles)",     group=grpSig, minval=1, maxval=60)
 max_gap_touches  = input.int(10, "Máx. candles entre 1º e 2º toque",   group=grpSig, minval=2, maxval=50, tooltip="Se o 2º toque no mesmo Fibo demorar mais que N candles, o setup expira. O próximo toque vira novo 1º toque.")
 wait_after_touch = input.int(1, "Janela pra confirmação após 2º toque (candles)", group=grpSig, minval=1, maxval=30, tooltip="Cross de Estoc 1m ou TRIX 5m vale entre o 2º toque e até N candles depois. Default 1 = apenas o candle do toque + próximo. Cross fora dessa janela é ignorado.")
-min_extras       = input.int(1, "Mín. confirmações (Estoc 1m / TRIX 5m)", group=grpSig, minval=1, maxval=2)
+min_extras       = input.int(2, "Mín. confirmações (Estoc 1m + TRIX 5m)", group=grpSig, minval=1, maxval=2, tooltip="2 (default v14) = exige AMBOS Estocástico 1m E TRIX 5m na direção. 1 = basta um dos dois.")
 show_alert   = input.bool(true, "Mostrar seta amarela de AVISO no 2º toque", group=grpSig, tooltip="Aviso visual do 2º toque, ANTES de qualquer confirmação — serve pra você se preparar.")
 sizing_cap   = input.int(20, "Cap máximo de contratos (5×4TFs)",         group=grpSig, minval=5, maxval=100)
 
@@ -43,7 +43,7 @@ show_5m_cmb  = input.bool(true, "5m — sinais individuais (Estoc/TRIX/DI±)",  
 show_15m_cmb = input.bool(true, "15m — sinais individuais",                  group=grpMTF)
 show_30m_cmb = input.bool(true, "30m — sinais individuais",                  group=grpMTF)
 show_60m_cmb = input.bool(true, "60m — sinais individuais",                  group=grpMTF)
-mtf_label_size = input.string("large", "Tamanho das setas MTF", options=["tiny","small","normal","large","huge"], group=grpMTF, tooltip="Tamanho das setas de sinais MTF no gráfico. Grande = mais legível.")
+mtf_label_size = input.string("small", "Tamanho das setas MTF", options=["tiny","small","normal","large","huge"], group=grpMTF, tooltip="Tamanho das setas MTF no gráfico. Default 'small' — se quiser mais legível suba pra 'normal' ou 'large'.")
 show_macd60  = input.bool(true, "MACD 60m — marcador de cruzamento (contexto)", group=grpMTF, tooltip="Marca no candle quando MACD 60m cruzar. Não pontua no score.")
 
 grpPnl     = "Painel"
