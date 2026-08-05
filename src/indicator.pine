@@ -49,7 +49,7 @@ mtf_label_size = input.string("small", "Tamanho das setas MTF", options=["tiny",
 show_macd60  = input.bool(true, "MACD 60m — marcador de cruzamento (contexto)", group=grpMTF, tooltip="Marca no candle quando MACD 60m cruzar. Não pontua no score.")
 
 grpGate = "Gate de Entrada"
-gate_mode = input.string("v14_close", "Modo do gate", options=["v14_close","v13_legacy","ambos"], group=grpGate, tooltip="v14_close (default) = 2º toque em Fibo + candle fecha na direção → entra na abertura do seguinte (anti-dupe: só 1ª seta por direção). v13_legacy = antigo (2º toque + Estoc 1m + TRIX 5m). ambos = mostra os dois.")
+gate_mode = input.string("v13_legacy", "Modo do gate", options=["v14_close","v13_legacy","ambos"], group=grpGate, tooltip="v13_legacy (default) = 2º toque + Estoc 1m + TRIX 5m (AMBOS via min_extras=2). v14_close = 2º toque em Fibo + candle fecha na direção → entra na abertura do seguinte (anti-dupe). ambos = mostra os dois.")
 
 grpPnl     = "Painel"
 show_panel = input.bool(true, "Mostrar painel de sinais",           group=grpPnl)
