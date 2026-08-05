@@ -210,7 +210,11 @@ get_macd_60m() =>
     m_state_b = macd_l > sig_l
     [m_up, m_dn, m_state_b]
 
-[macd60_cross_up, macd60_cross_dn, macd60_state_buy] = request.security(syminfo.tickerid, "60", get_macd_60m(), lookahead=barmerge.lookahead_off)
+[macd60_cross_up_raw, macd60_cross_dn_raw, macd60_state_buy] = request.security(syminfo.tickerid, "60", get_macd_60m(), lookahead=barmerge.lookahead_off)
+// Anti-spam: request.security propaga o cross bool pra todos os 60 candles 1min
+// do mesmo período 60m. Só firamos na transição (primeiro candle 1m que vê o cross).
+macd60_cross_up = macd60_cross_up_raw and not macd60_cross_up_raw[1]
+macd60_cross_dn = macd60_cross_dn_raw and not macd60_cross_dn_raw[1]
 
 // v14: "TF alinhado" = 3/3 no score direcional (Estoc + TRIX + DI±), sem ADX
 // ADX aparece separadamente como marca de intensidade no gráfico.
@@ -975,10 +979,9 @@ if show_60m_cmb and up_60m_sell
     label.new(bar_index, high, txt, style=label.style_arrowdown, color=color.new(color.purple, 0), textcolor=color.white, size=mtf_sz, yloc=yloc.abovebar)
 
 // ============================== MARCA MACD 60m (CONTEXTO MÉDIO PRAZO) ========
-// Mesmo padrão visual do ADX: número grande "M" no candle quando cruzar.
-// Cinza distingue da paleta de TF (aqua/lime/orange/purple).
-plotshape(show_macd60 and macd60_cross_up,  title="MACD 60m COMPRA", location=location.belowbar, color=color.new(color.gray, 0), style=shape.labelup,   size=size.large, text="M", textcolor=color.white)
-plotshape(show_macd60 and macd60_cross_dn,  title="MACD 60m VENDA",  location=location.abovebar, color=color.new(color.gray, 0), style=shape.labeldown, size=size.large, text="M", textcolor=color.white)
+// Marca compacta "M60" cinza no candle do cruzamento. Não pontua no score.
+plotshape(show_macd60 and macd60_cross_up,  title="MACD 60m COMPRA", location=location.belowbar, color=color.new(color.gray, 0), style=shape.labelup,   size=size.small, text="M60", textcolor=color.white)
+plotshape(show_macd60 and macd60_cross_dn,  title="MACD 60m VENDA",  location=location.abovebar, color=color.new(color.gray, 0), style=shape.labeldown, size=size.small, text="M60", textcolor=color.white)
 
 alertcondition(macd60_cross_up or macd60_cross_dn,
      title="Eixo WIN — MACD 60m cruzamento",
@@ -1004,11 +1007,11 @@ adx_mark_30m_sell = adx_activate_30m and score_30m_sell >= 2
 adx_mark_60m_buy  = adx_activate_60m and score_60m_buy  >= 2
 adx_mark_60m_sell = adx_activate_60m and score_60m_sell >= 2
 
-plotshape(adx_mark_5m_buy,   title="ADX 5m BUY",   location=location.belowbar, color=color.new(color.aqua,   0), style=shape.labelup,   size=size.large, text="1", textcolor=color.white)
-plotshape(adx_mark_5m_sell,  title="ADX 5m SELL",  location=location.abovebar, color=color.new(color.aqua,   0), style=shape.labeldown, size=size.large, text="1", textcolor=color.white)
-plotshape(adx_mark_15m_buy,  title="ADX 15m BUY",  location=location.belowbar, color=color.new(color.lime,   0), style=shape.labelup,   size=size.large, text="2", textcolor=color.white)
-plotshape(adx_mark_15m_sell, title="ADX 15m SELL", location=location.abovebar, color=color.new(color.lime,   0), style=shape.labeldown, size=size.large, text="2", textcolor=color.white)
-plotshape(adx_mark_30m_buy,  title="ADX 30m BUY",  location=location.belowbar, color=color.new(color.orange, 0), style=shape.labelup,   size=size.large, text="3", textcolor=color.white)
-plotshape(adx_mark_30m_sell, title="ADX 30m SELL", location=location.abovebar, color=color.new(color.orange, 0), style=shape.labeldown, size=size.large, text="3", textcolor=color.white)
-plotshape(adx_mark_60m_buy,  title="ADX 60m BUY",  location=location.belowbar, color=color.new(color.purple, 0), style=shape.labelup,   size=size.large, text="4", textcolor=color.white)
-plotshape(adx_mark_60m_sell, title="ADX 60m SELL", location=location.abovebar, color=color.new(color.purple, 0), style=shape.labeldown, size=size.large, text="4", textcolor=color.white)
+plotshape(adx_mark_5m_buy,   title="ADX 5m BUY",   location=location.belowbar, color=color.new(color.aqua,   0), style=shape.labelup,   size=size.small, text="A5",  textcolor=color.white)
+plotshape(adx_mark_5m_sell,  title="ADX 5m SELL",  location=location.abovebar, color=color.new(color.aqua,   0), style=shape.labeldown, size=size.small, text="A5",  textcolor=color.white)
+plotshape(adx_mark_15m_buy,  title="ADX 15m BUY",  location=location.belowbar, color=color.new(color.lime,   0), style=shape.labelup,   size=size.small, text="A15", textcolor=color.black)
+plotshape(adx_mark_15m_sell, title="ADX 15m SELL", location=location.abovebar, color=color.new(color.lime,   0), style=shape.labeldown, size=size.small, text="A15", textcolor=color.black)
+plotshape(adx_mark_30m_buy,  title="ADX 30m BUY",  location=location.belowbar, color=color.new(color.orange, 0), style=shape.labelup,   size=size.small, text="A30", textcolor=color.white)
+plotshape(adx_mark_30m_sell, title="ADX 30m SELL", location=location.abovebar, color=color.new(color.orange, 0), style=shape.labeldown, size=size.small, text="A30", textcolor=color.white)
+plotshape(adx_mark_60m_buy,  title="ADX 60m BUY",  location=location.belowbar, color=color.new(color.purple, 0), style=shape.labelup,   size=size.small, text="A60", textcolor=color.white)
+plotshape(adx_mark_60m_sell, title="ADX 60m SELL", location=location.abovebar, color=color.new(color.purple, 0), style=shape.labeldown, size=size.small, text="A60", textcolor=color.white)
