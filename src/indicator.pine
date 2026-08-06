@@ -18,7 +18,7 @@
 // -----------------------------------------------------------------------------
 
 indicator("Eixo WIN — Sinais X/3 (v14)", overlay=true,
-     max_lines_count=100, max_labels_count=500, max_boxes_count=50)
+     max_lines_count=100, max_labels_count=500, max_boxes_count=500)
 
 // ============================== PARÂMETROS ==================================
 grpFibo   = "Fibonacci"
@@ -1490,7 +1490,10 @@ sr_size   = input.string("small", "Tamanho", options=["tiny","small","normal","l
 sr_c_sup  = input.color(color.new(color.lime, 20), "Cor Suporte",     group=grp_sr)
 sr_c_res  = input.color(color.new(color.red,  20), "Cor Resistência", group=grp_sr)
 sr_show_price  = input.bool(false, "Mostrar preço junto ao símbolo", group=grp_sr, tooltip="Se ligado, imprime também o valor numérico do nível ao lado do símbolo.")
-sr_proximity   = input.int(50, "Proximidade em ticks pra marcar",   group=grp_sr, minval=1, maxval=500, tooltip="Só marca quando o candle chega a N ticks do nível. WIN: 1 tick = 5 pontos. Default 50 ticks = 250 pts. Se high/low envolvem o nível (toque direto), sempre marca.")
+sr_proximity   = input.int(50, "Símbolo — proximidade em ticks",   group=grp_sr, minval=1, maxval=500, tooltip="Só marca o SÍMBOLO quando o candle chega a N ticks do nível. WIN: 1 tick = 5 pontos. Default 50 ticks = 250 pts.")
+sr_zone_show   = input.bool(true, "Zona ± pontos — mostrar",       group=grp_sr, tooltip="Cria uma faixa translúcida ±N pontos ao redor de cada nível. Aparece na barra em que o candle entra na zona.")
+sr_zone_pts    = input.int(50,   "Zona ± pontos — largura (pts)",  group=grp_sr, minval=5, maxval=500, tooltip="Meia-largura da zona em PONTOS (não ticks). Default 50 pts pra cima e 50 pts pra baixo do nível.")
+sr_zone_alpha  = input.int(85,   "Zona ± pontos — transparência",  group=grp_sr, minval=50, maxval=100, tooltip="85 = translúcido (default). 100 = invisível. 50 = bem visível.")
 
 // Slots pré-preenchidos com os valores do print BTG (06/08/2026, WINQ26).
 // Edite à vontade. Slot com preço 0 = desativado.
@@ -1558,6 +1561,23 @@ f_sr_mark(price, tipo) =>
         txt = sr_show_price ? sr_symbol + " " + str.tostring(price, format.mintick) : sr_symbol
         label.new(bar_index, price, txt, xloc=xloc.bar_index, yloc=yloc.price, style=label.style_none, textcolor=cor, size=f_sr_size(sr_size))
 
+// Zona ±N pontos: candle entrou na faixa (high >= price-zona AND low <= price+zona)
+f_sr_zone_touched(price) =>
+    bool inside = false
+    if not na(price) and price > 0
+        zone_top = price + sr_zone_pts
+        zone_bot = price - sr_zone_pts
+        if high >= zone_bot and low <= zone_top
+            inside := true
+    inside
+
+// Box translúcido de 1 barra na zona quando o candle entra.
+// max_boxes_count=500 cuida do descarte automático dos antigos.
+f_sr_zone_mark(price, tipo) =>
+    if sr_show and sr_zone_show and tipo != "off" and f_sr_zone_touched(price)
+        cor = f_sr_color(price, tipo)
+        box.new(bar_index, price + sr_zone_pts, bar_index, price - sr_zone_pts, border_color=color.new(color.gray, 100), bgcolor=color.new(cor, sr_zone_alpha))
+
 f_sr_mark(sr_p1,  sr_t1)
 f_sr_mark(sr_p2,  sr_t2)
 f_sr_mark(sr_p3,  sr_t3)
@@ -1573,3 +1593,19 @@ f_sr_mark(sr_p12, sr_t12)
 f_sr_mark(sr_p13, sr_t13)
 f_sr_mark(sr_p14, sr_t14)
 f_sr_mark(sr_p15, sr_t15)
+
+f_sr_zone_mark(sr_p1,  sr_t1)
+f_sr_zone_mark(sr_p2,  sr_t2)
+f_sr_zone_mark(sr_p3,  sr_t3)
+f_sr_zone_mark(sr_p4,  sr_t4)
+f_sr_zone_mark(sr_p5,  sr_t5)
+f_sr_zone_mark(sr_p6,  sr_t6)
+f_sr_zone_mark(sr_p7,  sr_t7)
+f_sr_zone_mark(sr_p8,  sr_t8)
+f_sr_zone_mark(sr_p9,  sr_t9)
+f_sr_zone_mark(sr_p10, sr_t10)
+f_sr_zone_mark(sr_p11, sr_t11)
+f_sr_zone_mark(sr_p12, sr_t12)
+f_sr_zone_mark(sr_p13, sr_t13)
+f_sr_zone_mark(sr_p14, sr_t14)
+f_sr_zone_mark(sr_p15, sr_t15)
