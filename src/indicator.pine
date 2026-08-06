@@ -1,6 +1,6 @@
 // @version=5
 // -----------------------------------------------------------------------------
-// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.16 — 05/08/2026)
+// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.17 — 06/08/2026)
 // -----------------------------------------------------------------------------
 // APLICAR ESTE INDICADOR NO GRÁFICO DE 1 MINUTO DO ATIVO WIN.
 // Timeframe operacional: 1min | Contexto: 5m + 15m + 30m + 60m
@@ -56,7 +56,7 @@ gate_mode = input.string("v13_legacy", "Modo do gate", options=["v14_close","v13
 
 grpPnl     = "Painel"
 show_panel = input.bool(true, "Mostrar painel de sinais",           group=grpPnl)
-panel_pos  = input.string("top_right", "Posição do painel", options=["top_right","top_left","bottom_right","bottom_left"], group=grpPnl)
+panel_pos  = input.string("top_right", "Posição do painel", options=["top_left","top_center","top_right","middle_left","middle_center","middle_right","bottom_left","bottom_center","bottom_right"], group=grpPnl, tooltip="9 posições — use pra evitar sobreposição com ADX/Calc/Blotter.")
 
 // ============================== CORES DOS MARCADORES ========================
 // Setas MTF (combos 1.x/2.x/3.x/4.x) e ADX markers (A5/A15/A30/A60) usam a
@@ -95,6 +95,18 @@ size_from_str(s) =>
      s == "large" ? size.large  :
      s == "normal"? size.normal :
      s == "small" ? size.small  : size.tiny
+
+// Converte string do input em position.* constant (9 posições)
+f_pos(s) =>
+    s == "top_left"      ? position.top_left      :
+     s == "top_center"   ? position.top_center    :
+     s == "top_right"    ? position.top_right     :
+     s == "middle_left"  ? position.middle_left   :
+     s == "middle_center"? position.middle_center :
+     s == "middle_right" ? position.middle_right  :
+     s == "bottom_left"  ? position.bottom_left   :
+     s == "bottom_center"? position.bottom_center :
+     position.bottom_right
 
 // ============================== FIBONACCI ===================================
 // Puxa high/low do primeiro candle 5min do dia via request.security
@@ -282,6 +294,7 @@ grp_adx_pk   = "ADX Peak Tracker"
 adx_drop_pct = input.float(15.0, "Queda do topo pra sinalizar exaustão (%)", group=grp_adx_pk, minval=5, maxval=50, step=1)
 adx_min_peak = input.float(40.0, "Topo mínimo pra valer exaustão",           group=grp_adx_pk, minval=25, maxval=80, step=1)
 show_adx_cmp = input.bool(true,  "Mostrar tabela comparador ADX MTF",         group=grp_adx_pk)
+adx_pos_str  = input.string("top_center", "Posição do comparador ADX", options=["top_left","top_center","top_right","middle_left","middle_center","middle_right","bottom_left","bottom_center","bottom_right"], group=grp_adx_pk, tooltip="9 posições — use pra evitar sobreposição com Painel/Calc/Blotter.")
 
 is_new_day_adx = ta.change(dayofmonth) != 0
 
@@ -806,7 +819,7 @@ if scale_out_sell_now
         lado_open := ""
 
 // ============================== PAINEL VISUAL ===============================
-pos_table = panel_pos == "top_right" ? position.top_right : panel_pos == "top_left" ? position.top_left : panel_pos == "bottom_right" ? position.bottom_right : position.bottom_left
+pos_table = f_pos(panel_pos)
 
 var table pnl = table.new(pos_table, 3, 13, border_width=1, bgcolor=color.new(#1e222d, 30))
 
@@ -1161,7 +1174,7 @@ adx_mark_30m_sell = adx_activate_30m and score_30m_sell >= 2
 adx_mark_60m_sell = adx_activate_60m and score_60m_sell >= 2
 
 // ============================== TABELA COMPARADOR ADX MTF ====================
-var table tadx = table.new(position.top_center, 5, 5, border_width=1, bgcolor=color.new(#1e222d, 30))
+var table tadx = table.new(f_pos(adx_pos_str), 5, 5, border_width=1, bgcolor=color.new(#1e222d, 30))
 
 // Helpers top-level (Pine v5 não aceita função dentro de if)
 f_adx_bg(v)       => v >= 70 ? color.new(color.red, 40) : v >= 50 ? color.new(color.orange, 50) : v >= 30 ? color.new(color.green, 50) : color.new(color.gray, 70)
@@ -1241,8 +1254,9 @@ calc_dir   = input.string("Compra", "Direção", options=["Compra","Venda"], gro
 calc_entry = input.float(0.0, "Entrada",             step=5, group=grp_calc)
 calc_exit  = input.float(0.0, "Saída (0 = ao vivo)", step=5, group=grp_calc)
 calc_qty   = input.int(1,     "Contratos", minval=1, group=grp_calc)
+calc_pos_str = input.string("bottom_right", "Posição da calculadora", options=["top_left","top_center","top_right","middle_left","middle_center","middle_right","bottom_left","bottom_center","bottom_right"], group=grp_calc, tooltip="9 posições — use pra evitar sobreposição com Painel/ADX/Blotter.")
 
-var table tcalc = table.new(position.bottom_right, 2, 5, border_width=1, bgcolor=color.new(#1e222d, 30))
+var table tcalc = table.new(f_pos(calc_pos_str), 2, 5, border_width=1, bgcolor=color.new(#1e222d, 30))
 f_fmt(v) => str.tostring(v, "#.#")
 
 if calc_on and barstate.islast
@@ -1286,6 +1300,7 @@ if calc_on and barstate.islast
 grp_bl     = "Trade Blotter (10 eventos, cada um Compra ou Venda)"
 show_bl    = input.bool(true, "Mostrar setas de eventos no gráfico", group=grp_bl)
 show_bl_tb = input.bool(true, "Mostrar tabela BLOTTER",               group=grp_bl)
+blotter_pos_str = input.string("bottom_left", "Posição do blotter", options=["top_left","top_center","top_right","middle_left","middle_center","middle_right","bottom_left","bottom_center","bottom_right"], group=grp_bl, tooltip="9 posições — use pra evitar sobreposição com Painel/ADX/Calc.")
 
 // -------- 10 eventos: Data/Hora + Ação + Qtd + Preço --------
 ev1_t   = input.time(timestamp("2020-01-01T00:00"), "Ev1 Data/Hora", group=grp_bl, inline="ev1")
@@ -1391,7 +1406,7 @@ grand_total_pts = realized_pnl_pts + open_pnl_pts
 grand_total_rs  = realized_pnl_rs  + open_pnl_rs
 
 // -------- Tabela BLOTTER --------
-var table tbl = table.new(position.bottom_left, 2, 10, border_width=1, bgcolor=color.new(#1e222d, 30))
+var table tbl = table.new(f_pos(blotter_pos_str), 2, 10, border_width=1, bgcolor=color.new(#1e222d, 30))
 
 if barstate.islast and show_bl_tb
     hdr    = color.new(color.blue, 25)
@@ -1462,3 +1477,98 @@ if show_bl
     f_draw_ev(8,  ev8_t,  ev8_act,  ev8_qty,  ev8_p)
     f_draw_ev(9,  ev9_t,  ev9_act,  ev9_qty,  ev9_p)
     f_draw_ev(10, ev10_t, ev10_act, ev10_qty, ev10_p)
+
+// ============================== S/R BANK (níveis do BTG) =====================
+// Copie os preços das etiquetas amarelas do BTG Trader (Suportes/Resistências)
+// e cole nos 15 slots abaixo. Cada slot marca com símbolo na altura do preço
+// (sem linha horizontal). Tipo "auto" pinta verde se preço atual > nível
+// (suporte), vermelho se abaixo (resistência). Slot com preço 0 = desativado.
+grp_sr    = "🎯 S/R Bank (níveis do BTG)"
+sr_show   = input.bool(true, "Ativar S/R Bank", group=grp_sr)
+sr_symbol = input.string("◆", "Símbolo", options=["◆","●","✕","■","▲","▼","★","◈","◉","⬥"], group=grp_sr)
+sr_size   = input.string("small", "Tamanho", options=["tiny","small","normal","large"], group=grp_sr)
+sr_offset = input.int(5, "Offset horizontal (barras à direita)", group=grp_sr, minval=0, maxval=50)
+sr_c_sup  = input.color(color.new(color.lime, 20), "Cor Suporte",     group=grp_sr)
+sr_c_res  = input.color(color.new(color.red,  20), "Cor Resistência", group=grp_sr)
+sr_show_price = input.bool(true, "Mostrar preço junto ao símbolo", group=grp_sr)
+
+sr_p1  = input.price(0.0, "S/R 01",  group=grp_sr, inline="sr01", confirm=true)
+sr_t1  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr01")
+sr_p2  = input.price(0.0, "S/R 02",  group=grp_sr, inline="sr02", confirm=true)
+sr_t2  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr02")
+sr_p3  = input.price(0.0, "S/R 03",  group=grp_sr, inline="sr03", confirm=true)
+sr_t3  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr03")
+sr_p4  = input.price(0.0, "S/R 04",  group=grp_sr, inline="sr04", confirm=true)
+sr_t4  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr04")
+sr_p5  = input.price(0.0, "S/R 05",  group=grp_sr, inline="sr05", confirm=true)
+sr_t5  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr05")
+sr_p6  = input.price(0.0, "S/R 06",  group=grp_sr, inline="sr06", confirm=true)
+sr_t6  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr06")
+sr_p7  = input.price(0.0, "S/R 07",  group=grp_sr, inline="sr07", confirm=true)
+sr_t7  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr07")
+sr_p8  = input.price(0.0, "S/R 08",  group=grp_sr, inline="sr08", confirm=true)
+sr_t8  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr08")
+sr_p9  = input.price(0.0, "S/R 09",  group=grp_sr, inline="sr09", confirm=true)
+sr_t9  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr09")
+sr_p10 = input.price(0.0, "S/R 10",  group=grp_sr, inline="sr10", confirm=true)
+sr_t10 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr10")
+sr_p11 = input.price(0.0, "S/R 11",  group=grp_sr, inline="sr11", confirm=true)
+sr_t11 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr11")
+sr_p12 = input.price(0.0, "S/R 12",  group=grp_sr, inline="sr12", confirm=true)
+sr_t12 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr12")
+sr_p13 = input.price(0.0, "S/R 13",  group=grp_sr, inline="sr13", confirm=true)
+sr_t13 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr13")
+sr_p14 = input.price(0.0, "S/R 14",  group=grp_sr, inline="sr14", confirm=true)
+sr_t14 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr14")
+sr_p15 = input.price(0.0, "S/R 15",  group=grp_sr, inline="sr15", confirm=true)
+sr_t15 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr15")
+
+f_sr_color(price, tipo) =>
+    tipo == "suporte"     ? sr_c_sup :
+     tipo == "resistencia"? sr_c_res :
+     close > price        ? sr_c_sup :
+                            sr_c_res
+
+f_sr_size(s) =>
+    s == "tiny" ? size.tiny : s == "small" ? size.small : s == "normal" ? size.normal : size.large
+
+f_sr_draw(price, tipo, storage) =>
+    label.delete(storage)
+    lbl = if sr_show and price > 0 and tipo != "off"
+        cor = f_sr_color(price, tipo)
+        txt = sr_show_price ? sr_symbol + "  " + str.tostring(price, format.mintick) : sr_symbol
+        label.new(bar_index + sr_offset, price, txt, xloc=xloc.bar_index, yloc=yloc.price, style=label.style_none, textcolor=cor, size=f_sr_size(sr_size))
+    lbl
+
+var label sr_lbl1  = na
+var label sr_lbl2  = na
+var label sr_lbl3  = na
+var label sr_lbl4  = na
+var label sr_lbl5  = na
+var label sr_lbl6  = na
+var label sr_lbl7  = na
+var label sr_lbl8  = na
+var label sr_lbl9  = na
+var label sr_lbl10 = na
+var label sr_lbl11 = na
+var label sr_lbl12 = na
+var label sr_lbl13 = na
+var label sr_lbl14 = na
+var label sr_lbl15 = na
+
+if barstate.islast
+    sr_lbl1  := f_sr_draw(sr_p1,  sr_t1,  sr_lbl1)
+    sr_lbl2  := f_sr_draw(sr_p2,  sr_t2,  sr_lbl2)
+    sr_lbl3  := f_sr_draw(sr_p3,  sr_t3,  sr_lbl3)
+    sr_lbl4  := f_sr_draw(sr_p4,  sr_t4,  sr_lbl4)
+    sr_lbl5  := f_sr_draw(sr_p5,  sr_t5,  sr_lbl5)
+    sr_lbl6  := f_sr_draw(sr_p6,  sr_t6,  sr_lbl6)
+    sr_lbl7  := f_sr_draw(sr_p7,  sr_t7,  sr_lbl7)
+    sr_lbl8  := f_sr_draw(sr_p8,  sr_t8,  sr_lbl8)
+    sr_lbl9  := f_sr_draw(sr_p9,  sr_t9,  sr_lbl9)
+    sr_lbl10 := f_sr_draw(sr_p10, sr_t10, sr_lbl10)
+    sr_lbl11 := f_sr_draw(sr_p11, sr_t11, sr_lbl11)
+    sr_lbl12 := f_sr_draw(sr_p12, sr_t12, sr_lbl12)
+    sr_lbl13 := f_sr_draw(sr_p13, sr_t13, sr_lbl13)
+    sr_lbl14 := f_sr_draw(sr_p14, sr_t14, sr_lbl14)
+    sr_lbl15 := f_sr_draw(sr_p15, sr_t15, sr_lbl15)
