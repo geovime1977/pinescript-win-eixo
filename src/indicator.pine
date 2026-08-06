@@ -1524,21 +1524,26 @@ sr_p15 = input.price(0.0, "S/R 15",  group=grp_sr, inline="sr15", confirm=true)
 sr_t15 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr15")
 
 f_sr_color(price, tipo) =>
-    tipo == "suporte"     ? sr_c_sup :
-     tipo == "resistencia"? sr_c_res :
-     close > price        ? sr_c_sup :
-                            sr_c_res
+    color cor = sr_c_sup
+    if tipo == "resistencia"
+        cor := sr_c_res
+    else if tipo == "suporte"
+        cor := sr_c_sup
+    else
+        cor := close > price ? sr_c_sup : sr_c_res
+    cor
 
 f_sr_size(s) =>
     s == "tiny" ? size.tiny : s == "small" ? size.small : s == "normal" ? size.normal : size.large
 
 f_sr_draw(price, tipo, storage) =>
     label.delete(storage)
-    lbl = if sr_show and price > 0 and tipo != "off"
+    label result = na
+    if sr_show and price > 0 and tipo != "off"
         cor = f_sr_color(price, tipo)
         txt = sr_show_price ? sr_symbol + "  " + str.tostring(price, format.mintick) : sr_symbol
-        label.new(bar_index + sr_offset, price, txt, xloc=xloc.bar_index, yloc=yloc.price, style=label.style_none, textcolor=cor, size=f_sr_size(sr_size))
-    lbl
+        result := label.new(bar_index + sr_offset, price, txt, xloc=xloc.bar_index, yloc=yloc.price, style=label.style_none, textcolor=cor, size=f_sr_size(sr_size))
+    result
 
 var label sr_lbl1  = na
 var label sr_lbl2  = na
