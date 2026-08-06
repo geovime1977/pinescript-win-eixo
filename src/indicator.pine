@@ -1487,41 +1487,43 @@ grp_sr    = "🎯 S/R Bank (níveis do BTG)"
 sr_show   = input.bool(true, "Ativar S/R Bank", group=grp_sr)
 sr_symbol = input.string("◆", "Símbolo", options=["◆","●","✕","■","▲","▼","★","◈","◉","⬥"], group=grp_sr)
 sr_size   = input.string("small", "Tamanho", options=["tiny","small","normal","large"], group=grp_sr)
-sr_offset = input.int(5, "Offset horizontal (barras à direita)", group=grp_sr, minval=0, maxval=50)
 sr_c_sup  = input.color(color.new(color.lime, 20), "Cor Suporte",     group=grp_sr)
 sr_c_res  = input.color(color.new(color.red,  20), "Cor Resistência", group=grp_sr)
-sr_show_price = input.bool(true, "Mostrar preço junto ao símbolo", group=grp_sr)
+sr_show_price  = input.bool(false, "Mostrar preço junto ao símbolo", group=grp_sr, tooltip="Se ligado, imprime também o valor numérico do nível ao lado do símbolo.")
+sr_proximity   = input.int(50, "Proximidade em ticks pra marcar",   group=grp_sr, minval=1, maxval=500, tooltip="Só marca quando o candle chega a N ticks do nível. WIN: 1 tick = 5 pontos. Default 50 ticks = 250 pts. Se high/low envolvem o nível (toque direto), sempre marca.")
 
-sr_p1  = input.price(0.0, "S/R 01",  group=grp_sr, inline="sr01", confirm=true)
-sr_t1  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr01")
-sr_p2  = input.price(0.0, "S/R 02",  group=grp_sr, inline="sr02", confirm=true)
-sr_t2  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr02")
-sr_p3  = input.price(0.0, "S/R 03",  group=grp_sr, inline="sr03", confirm=true)
-sr_t3  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr03")
-sr_p4  = input.price(0.0, "S/R 04",  group=grp_sr, inline="sr04", confirm=true)
-sr_t4  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr04")
-sr_p5  = input.price(0.0, "S/R 05",  group=grp_sr, inline="sr05", confirm=true)
-sr_t5  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr05")
-sr_p6  = input.price(0.0, "S/R 06",  group=grp_sr, inline="sr06", confirm=true)
-sr_t6  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr06")
-sr_p7  = input.price(0.0, "S/R 07",  group=grp_sr, inline="sr07", confirm=true)
-sr_t7  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr07")
-sr_p8  = input.price(0.0, "S/R 08",  group=grp_sr, inline="sr08", confirm=true)
-sr_t8  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr08")
-sr_p9  = input.price(0.0, "S/R 09",  group=grp_sr, inline="sr09", confirm=true)
-sr_t9  = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr09")
-sr_p10 = input.price(0.0, "S/R 10",  group=grp_sr, inline="sr10", confirm=true)
-sr_t10 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr10")
-sr_p11 = input.price(0.0, "S/R 11",  group=grp_sr, inline="sr11", confirm=true)
-sr_t11 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr11")
-sr_p12 = input.price(0.0, "S/R 12",  group=grp_sr, inline="sr12", confirm=true)
-sr_t12 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr12")
-sr_p13 = input.price(0.0, "S/R 13",  group=grp_sr, inline="sr13", confirm=true)
-sr_t13 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr13")
-sr_p14 = input.price(0.0, "S/R 14",  group=grp_sr, inline="sr14", confirm=true)
-sr_t14 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr14")
-sr_p15 = input.price(0.0, "S/R 15",  group=grp_sr, inline="sr15", confirm=true)
-sr_t15 = input.string("auto", "",    options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr15")
+// Slots pré-preenchidos com os valores do print BTG (06/08/2026, WINQ26).
+// Edite à vontade. Slot com preço 0 = desativado.
+sr_p1  = input.price(180.695, "S/R 01",  group=grp_sr, inline="sr01", confirm=true)
+sr_t1  = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr01")
+sr_p2  = input.price(179.240, "S/R 02",  group=grp_sr, inline="sr02", confirm=true)
+sr_t2  = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr02")
+sr_p3  = input.price(178.595, "S/R 03",  group=grp_sr, inline="sr03", confirm=true)
+sr_t3  = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr03")
+sr_p4  = input.price(177.685, "S/R 04",  group=grp_sr, inline="sr04", confirm=true)
+sr_t4  = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr04")
+sr_p5  = input.price(176.935, "S/R 05",  group=grp_sr, inline="sr05", confirm=true)
+sr_t5  = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr05")
+sr_p6  = input.price(176.205, "S/R 06",  group=grp_sr, inline="sr06", confirm=true)
+sr_t6  = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr06")
+sr_p7  = input.price(175.705, "S/R 07",  group=grp_sr, inline="sr07", confirm=true)
+sr_t7  = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr07")
+sr_p8  = input.price(174.700, "S/R 08",  group=grp_sr, inline="sr08", confirm=true)
+sr_t8  = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr08")
+sr_p9  = input.price(173.595, "S/R 09",  group=grp_sr, inline="sr09", confirm=true)
+sr_t9  = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr09")
+sr_p10 = input.price(172.385, "S/R 10",  group=grp_sr, inline="sr10", confirm=true)
+sr_t10 = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr10")
+sr_p11 = input.price(171.935, "S/R 11",  group=grp_sr, inline="sr11", confirm=true)
+sr_t11 = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr11")
+sr_p12 = input.price(0.0,     "S/R 12",  group=grp_sr, inline="sr12", confirm=true)
+sr_t12 = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr12")
+sr_p13 = input.price(0.0,     "S/R 13",  group=grp_sr, inline="sr13", confirm=true)
+sr_t13 = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr13")
+sr_p14 = input.price(0.0,     "S/R 14",  group=grp_sr, inline="sr14", confirm=true)
+sr_t14 = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr14")
+sr_p15 = input.price(0.0,     "S/R 15",  group=grp_sr, inline="sr15", confirm=true)
+sr_t15 = input.string("auto", "",         options=["auto","suporte","resistencia","off"], group=grp_sr, inline="sr15")
 
 f_sr_color(price, tipo) =>
     color cor = sr_c_sup
@@ -1536,44 +1538,38 @@ f_sr_color(price, tipo) =>
 f_sr_size(s) =>
     s == "tiny" ? size.tiny : s == "small" ? size.small : s == "normal" ? size.normal : size.large
 
-f_sr_draw(price, tipo, storage) =>
-    label.delete(storage)
-    label result = na
-    if sr_show and price > 0 and tipo != "off"
+// Toque direto (candle envolve o nível) OU proximidade (high/low a N ticks).
+f_sr_touched(price) =>
+    bool touched = false
+    if not na(price) and price > 0
+        if high >= price and low <= price
+            touched := true
+        else
+            proximity_pts = sr_proximity * syminfo.mintick
+            if math.abs(high - price) <= proximity_pts or math.abs(low - price) <= proximity_pts
+                touched := true
+    touched
+
+// Marca símbolo NA barra corrente APENAS se o candle tocou/chegou perto do nível.
+// max_labels_count=500 no indicator() cuida do descarte automático dos antigos.
+f_sr_mark(price, tipo) =>
+    if sr_show and tipo != "off" and f_sr_touched(price)
         cor = f_sr_color(price, tipo)
-        txt = sr_show_price ? sr_symbol + "  " + str.tostring(price, format.mintick) : sr_symbol
-        result := label.new(bar_index + sr_offset, price, txt, xloc=xloc.bar_index, yloc=yloc.price, style=label.style_none, textcolor=cor, size=f_sr_size(sr_size))
-    result
+        txt = sr_show_price ? sr_symbol + " " + str.tostring(price, format.mintick) : sr_symbol
+        label.new(bar_index, price, txt, xloc=xloc.bar_index, yloc=yloc.price, style=label.style_none, textcolor=cor, size=f_sr_size(sr_size))
 
-var label sr_lbl1  = na
-var label sr_lbl2  = na
-var label sr_lbl3  = na
-var label sr_lbl4  = na
-var label sr_lbl5  = na
-var label sr_lbl6  = na
-var label sr_lbl7  = na
-var label sr_lbl8  = na
-var label sr_lbl9  = na
-var label sr_lbl10 = na
-var label sr_lbl11 = na
-var label sr_lbl12 = na
-var label sr_lbl13 = na
-var label sr_lbl14 = na
-var label sr_lbl15 = na
-
-if barstate.islast
-    sr_lbl1  := f_sr_draw(sr_p1,  sr_t1,  sr_lbl1)
-    sr_lbl2  := f_sr_draw(sr_p2,  sr_t2,  sr_lbl2)
-    sr_lbl3  := f_sr_draw(sr_p3,  sr_t3,  sr_lbl3)
-    sr_lbl4  := f_sr_draw(sr_p4,  sr_t4,  sr_lbl4)
-    sr_lbl5  := f_sr_draw(sr_p5,  sr_t5,  sr_lbl5)
-    sr_lbl6  := f_sr_draw(sr_p6,  sr_t6,  sr_lbl6)
-    sr_lbl7  := f_sr_draw(sr_p7,  sr_t7,  sr_lbl7)
-    sr_lbl8  := f_sr_draw(sr_p8,  sr_t8,  sr_lbl8)
-    sr_lbl9  := f_sr_draw(sr_p9,  sr_t9,  sr_lbl9)
-    sr_lbl10 := f_sr_draw(sr_p10, sr_t10, sr_lbl10)
-    sr_lbl11 := f_sr_draw(sr_p11, sr_t11, sr_lbl11)
-    sr_lbl12 := f_sr_draw(sr_p12, sr_t12, sr_lbl12)
-    sr_lbl13 := f_sr_draw(sr_p13, sr_t13, sr_lbl13)
-    sr_lbl14 := f_sr_draw(sr_p14, sr_t14, sr_lbl14)
-    sr_lbl15 := f_sr_draw(sr_p15, sr_t15, sr_lbl15)
+f_sr_mark(sr_p1,  sr_t1)
+f_sr_mark(sr_p2,  sr_t2)
+f_sr_mark(sr_p3,  sr_t3)
+f_sr_mark(sr_p4,  sr_t4)
+f_sr_mark(sr_p5,  sr_t5)
+f_sr_mark(sr_p6,  sr_t6)
+f_sr_mark(sr_p7,  sr_t7)
+f_sr_mark(sr_p8,  sr_t8)
+f_sr_mark(sr_p9,  sr_t9)
+f_sr_mark(sr_p10, sr_t10)
+f_sr_mark(sr_p11, sr_t11)
+f_sr_mark(sr_p12, sr_t12)
+f_sr_mark(sr_p13, sr_t13)
+f_sr_mark(sr_p14, sr_t14)
+f_sr_mark(sr_p15, sr_t15)
