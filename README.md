@@ -1,6 +1,6 @@
 # pinescript-win-eixo
 
-Estratégia Day Trade WIN — **Congruência MTF + Fibonacci de Abertura**, implementada como Pine Script v5 (v14 / 04-08-2026) para rodar nativamente no **TradingView-BTG**.
+Estratégia Day Trade WIN — **Congruência MTF + Fibonacci de Abertura + Rompimento Estrutural X/O**, implementada como Pine Script v5 (v15 / 07-08-2026) para rodar nativamente no **TradingView-BTG**.
 
 ## Escopo
 
@@ -28,7 +28,7 @@ pinescript-win-eixo/
     └── ALERTAS-CONFIG.md       # Setup de alertas mobile/email
 ```
 
-## Spec canônica v14 (04-08-2026)
+## Spec canônica v15 (07-08-2026)
 
 **TF operacional:** 1 minuto (gatilho + entrada)
 **TFs de análise:** 5 · 15 · 30 · 60 (sem análise em Diário)
@@ -46,20 +46,26 @@ pinescript-win-eixo/
 
 **Score X/3 por TF:** Estoc + TRIX + DI± na direção. ADX fora do cálculo.
 
-**Sizing:** `5 × N_TFs_com_3/3` (mín 5, máx 20)
+**Sizing orientativo (v15 não calcula na tela):** `5 × N_TFs_com_3/3` (mín 5, máx 20) — o operador decide olhando as luzes 🟢🟢🟢 do painel.
 
-| N_TFs 3/3 | Contratos |
+| N_TFs 3/3 | Contratos sugeridos |
 |---|---|
-| 0 | 5 (mínimo) |
-| 1 | 5 |
+| 0-1 | 5 (mínimo) |
 | 2 | 10 |
 | 3 | 15 |
 | 4 | 20 |
 
-**Gate de entrada (v14):**
+**Gate de entrada (v14, mantido):**
 1. Preço bate no Fibo pela 2ª vez
 2. Candle da 2ª batida fecha **acima** (compra) ou **abaixo** (venda) do nível
 3. Entrada = abertura do candle **seguinte**
+
+**Rompimento Estrutural X/O por Fibo (v15, novo):**
+1. Candle 1min fecha do lado errado de um Fibo → vira **candle-ref**
+2. Novo candle fecha do mesmo lado com extrema além da ref (low<ref_low pra X ou high>ref_high pra O) → **CONFIRMA**
+3. Marca `X` (perda de suporte → resistência) ou `O` (superação → suporte) no preço do Fibo
+4. Linha do Fibo muda de cor (verde=suporte confirmado, vermelho=resistência confirmada)
+5. Cancelamento: 2 fechamentos consecutivos do lado oposto → volta ao neutro
 
 Spec detalhada: `~/vault/meus-projetos/01 - Profissional/Projetos/Estratégia Day Trade WIN — Congruência MTF + Fibo de Abertura.md`
 
@@ -119,8 +125,8 @@ Ver `docs/COMO-INSTALAR-PROFIT.md` para importar no editor de estratégias do Pr
 - **Timeframes de análise:** 5min + 15min + 30min + 60min
 - **Fibonacci:** projetado do 1º candle 5min do dia (21 níveis: MID + U0..U450 + L0..L450)
 - **Gate:** 2ª batida em Fibo + candle fecha na direção + entra na abertura do seguinte
-- **Sizing:** 5 × N_TFs com 3/3 (mín 5, máx 20)
-- **Runner:** scale-out por flip de TF travado
+- **Sizing:** orientativo (`5 × N_TFs com 3/3`, mín 5, máx 20) — operador decide
+- **Rompimento:** X/O por Fibo com confirmação de 3 candles (ref rolante, cancela em 2 fechamentos opostos)
 
 ## Limitações
 
@@ -132,6 +138,9 @@ Ver `docs/COMO-INSTALAR-PROFIT.md` para importar no editor de estratégias do Pr
 ## Roadmap
 
 - [x] v14 pushada (indicator + strategy + docs + NTSL)
-- [ ] Testar em 3+ dias de pregão real com v14
-- [ ] Ajustar tolerâncias baseado no comportamento observado
+- [x] v15 do indicator: scale-out 5×N removido, rompimento X/O por Fibo adicionado
+- [ ] Testar v15 em 3+ dias de pregão real
+- [ ] Portar rompimento X/O para strategy.pine (hoje só no indicator)
+- [ ] Portar rompimento X/O para strategy.ntsl (Profit)
+- [ ] Ajustar `break_cancel_n` baseado no comportamento observado
 - [ ] Migrar pra Windows/MT5 quando precisar de automação total de ordens
