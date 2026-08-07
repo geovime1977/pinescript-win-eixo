@@ -1,23 +1,34 @@
 // @version=5
 // -----------------------------------------------------------------------------
-// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v14.17 — 06/08/2026)
+// Eixo Estratégico — WIN Day Trade | Indicador de Sinais X/3 (v15.0 — 07/08/2026)
 // -----------------------------------------------------------------------------
 // APLICAR ESTE INDICADOR NO GRÁFICO DE 1 MINUTO DO ATIVO WIN.
 // Timeframe operacional: 1min | Contexto: 5m + 15m + 30m + 60m
 // Fibonacci: primeiro candle 5min do dia
 //
-// v14 (04/08/2026) — alinhado à spec canônica:
+// v15 (07/08/2026) — Rompimento estrutural por Fibo:
+//   - REMOVIDO: sistema de scale-out por flip (5×N contratos)
+//   - REMOVIDO: painel de Posição/TFs travados/Flips pendentes
+//   - NOVO: marcador X (perda de suporte) e O (superação de resistência) por Fibo
+//     Confirmação: candle-ref fecha do lado errado; algum candle posterior rompe
+//     a extrema da ref (low<ref_low pra X ou high>ref_high pra O) fechando também
+//     do lado. Referência rola: novo candle fechando do lado errado com extrema
+//     interna substitui a ref anterior.
+//     Cancelamento: 2 fechamentos consecutivos do lado oposto (reconquista).
+//   - NOVO: cor dinâmica das linhas Fibo — verde quando é suporte confirmado (O),
+//     vermelho quando é resistência confirmada (X), cor original quando neutro.
+//
+// v14 (04/08/2026) — spec canônica mantida:
 //   - Estocástico LENTO (K=8, D=3, SMA duplo) em todos os TFs
-//   - TRIX (9, MMA 3) em todos os TFs (era MMA 4)
+//   - TRIX (9, MMA 3) em todos os TFs
 //   - Score X/3 por TF: Estoc + TRIX + DI±  (ADX fora do score)
-//   - ADX (8,8) é marcador visual de intensidade (número grande no candle)
-//   - MACD 60m (12,26,9) mostrado como marcador tipo ADX + linha no painel/rodapé
-//   - Setas MTF: label dinâmico com <TF>.<indicadores> (ex: "4.1.2.3")
-//     Legenda: 1=Estoc, 2=TRIX, 3=DI±
-//     TF: 1=5m · 2=15m · 3=30m · 4=60m
+//   - ADX (8,8) é marcador visual de intensidade
+//   - MACD 60m (12,26,9) como marcador contextual + linha no painel
+//   - Setas MTF: label dinâmico <TF>.<indicadores> (ex: "4.1.2.3")
+//     Legenda: 1=Estoc, 2=TRIX, 3=DI±  |  TF: 1=5m · 2=15m · 3=30m · 4=60m
 // -----------------------------------------------------------------------------
 
-indicator("Eixo WIN — Sinais X/3 (v14)", overlay=true,
+indicator("Eixo WIN — Sinais X/3 (v15)", overlay=true,
      max_lines_count=100, max_labels_count=500, max_boxes_count=500)
 
 // ============================== PARÂMETROS ==================================
@@ -39,9 +50,7 @@ max_gap_touches  = input.int(10, "Máx. candles entre 1º e 2º toque",   group=
 wait_after_touch = input.int(1, "Janela pra confirmação após 2º toque (candles)", group=grpSig, minval=1, maxval=30, tooltip="Cross de Estoc 1m ou TRIX 5m vale entre o 2º toque e até N candles depois. Default 1 = apenas o candle do toque + próximo. Cross fora dessa janela é ignorado.")
 min_extras       = input.int(2, "Mín. confirmações (Estoc 1m + TRIX 5m)", group=grpSig, minval=1, maxval=2, tooltip="2 (default v14) = exige AMBOS Estocástico 1m E TRIX 5m na direção. 1 = basta um dos dois.")
 anti_faca    = input.bool(true, "Anti-faca (bloqueia se HTF 3/3 contra)", group=grpSig, tooltip="Bloqueia BUY se 15m OU 30m OU 60m estiver em score 3/3 SELL. Idem SELL. Vale pros dois gates (v13 e v14). Evita pegar faca caindo.")
-adx_bonus    = input.int(5, "Bônus contratos quando ADX 5m intensifica", group=grpSig, minval=0, maxval=10, tooltip="Se ADX 5m está ativo (> 30 ou banda 70-80 caindo) → soma +N contratos ao sizing base (limitado por sizing_cap).")
 show_alert   = input.bool(true, "Mostrar seta amarela de AVISO no 2º toque", group=grpSig, tooltip="Aviso visual do 2º toque, ANTES de qualquer confirmação — serve pra você se preparar.")
-sizing_cap   = input.int(20, "Cap máximo de contratos (5×4TFs)",         group=grpSig, minval=5, maxval=100)
 
 grpMTF = "Setas MTF (Setup por Timeframe)"
 show_5m_cmb  = input.bool(true, "5m — sinais individuais (Estoc/TRIX/DI±)",  group=grpMTF)
@@ -152,28 +161,123 @@ color_sup_mid  = color.new(color.blue, 0)   // sem transparência
 color_res_mid  = color.new(color.red,  0)
 color_extremo  = color.new(color.black, 0)  // extremos R0/S0 do 1º candle 5min
 color_mid_1st  = color.new(color.orange, 0) // meio do 1º candle 5min
+color_confirm_sup = color.new(color.green, 0)  // Fibo virou suporte confirmado (O)
+color_confirm_res = color.new(color.red,   0)  // Fibo virou resistência confirmada (X)
 
-plot(show_fibo and has_base ? u0   : na, "★ R0 (topo 1º 5m)", color=color_r0, linewidth=lw_extremo)
-plot(show_fibo and has_base ? umid : na, "★ MID (meio 1º 5m)", color=color_mid_1st, linewidth=2)
-plot(show_fibo and has_base ? u50  : na, "★ R50",    color=color_res_mid, linewidth=2)
-plot(show_fibo and has_base ? u100 : na, "R100",     color=color_res)
-plot(show_fibo and has_base ? u150 : na, "R150", color=color_res)
-plot(show_fibo and has_base ? u200 : na, "R200", color=color_res)
-plot(show_fibo and has_base and show_all ? u250 : na, "R250", color=color_res)
-plot(show_fibo and has_base and show_all ? u300 : na, "R300", color=color_res)
-plot(show_fibo and has_base and show_all ? u350 : na, "R350", color=color_res)
-plot(show_fibo and has_base and show_all ? u400 : na, "R400", color=color_res)
-plot(show_fibo and has_base and show_all ? u450 : na, "R450", color=color_res)
-plot(show_fibo and has_base ? l0   : na, "★ S0 (base 1º 5m)", color=color_s0, linewidth=lw_extremo)
-plot(show_fibo and has_base ? l50  : na, "★ S50",    color=color_sup_mid, linewidth=2)
-plot(show_fibo and has_base ? l100 : na, "S100",     color=color_sup)
-plot(show_fibo and has_base ? l150 : na, "S150", color=color_sup)
-plot(show_fibo and has_base ? l200 : na, "S200", color=color_sup)
-plot(show_fibo and has_base and show_all ? l250 : na, "S250", color=color_sup)
-plot(show_fibo and has_base and show_all ? l300 : na, "S300", color=color_sup)
-plot(show_fibo and has_base and show_all ? l350 : na, "S350", color=color_sup)
-plot(show_fibo and has_base and show_all ? l400 : na, "S400", color=color_sup)
-plot(show_fibo and has_base and show_all ? l450 : na, "S450", color=color_sup)
+// ============================== BREAKOUT CONFIRMATION (v15) =================
+// Rastreia por Fibo: X (perda de suporte confirmada, vira resistência)
+//                    O (superação de resistência confirmada, vira suporte)
+// Regra: candle A fecha do lado errado do Fibo → vira "ref". Novo candle que
+// feche do mesmo lado com extrema além da ref (low<ref_low pra X, high>ref_high
+// pra O) → CONFIRMA. Se a extrema estiver aquém da ref, o novo candle vira nova
+// ref (rolagem). Cancelamento: 2 fechamentos consecutivos do lado oposto.
+// Estado por nível: 0=neutro, 1=suporte confirmado, 2=resistência confirmada
+grpBreak = "Rompimento Fibo (v15)"
+show_break_marks = input.bool(true, "Mostrar marcadores X/O de rompimento", group=grpBreak)
+break_mark_size = input.string("small", "Tamanho dos marcadores X/O", options=["tiny","small","normal","large"], group=grpBreak)
+break_cancel_n = input.int(2, "Cancelar após N fechamentos consecutivos do lado oposto", group=grpBreak, minval=1, maxval=10)
+
+f_break_size(s) => s == "tiny" ? size.tiny : s == "small" ? size.small : s == "normal" ? size.normal : size.large
+break_sz = f_break_size(break_mark_size)
+
+var fib_st       = array.new_int(21, 0)
+var fib_ref_lo   = array.new_float(21, na)
+var fib_ref_hi   = array.new_float(21, na)
+var fib_abv_run  = array.new_int(21, 0)
+var fib_blw_run  = array.new_int(21, 0)
+
+is_new_day_break = ta.change(dayofmonth) != 0
+if has_base
+    if is_new_day_break
+        for i = 0 to 20
+            array.set(fib_st, i, 0)
+            array.set(fib_ref_lo, i, na)
+            array.set(fib_ref_hi, i, na)
+            array.set(fib_abv_run, i, 0)
+            array.set(fib_blw_run, i, 0)
+    fib_prices = array.from(u0, u50, u100, u150, u200, u250, u300, u350, u400, u450, umid, l0, l50, l100, l150, l200, l250, l300, l350, l400, l450)
+    for i = 0 to 20
+        level = array.get(fib_prices, i)
+        st = array.get(fib_st, i)
+        ref_lo = array.get(fib_ref_lo, i)
+        ref_hi = array.get(fib_ref_hi, i)
+        abv_run = array.get(fib_abv_run, i)
+        blw_run = array.get(fib_blw_run, i)
+        closed_below = close < level
+        closed_above = close > level
+        abv_run := closed_above ? abv_run + 1 : 0
+        blw_run := closed_below ? blw_run + 1 : 0
+        // Cancelamento por reconquista sustentada
+        if st == 2 and abv_run >= break_cancel_n
+            st := 0
+            ref_lo := na
+        if st == 1 and blw_run >= break_cancel_n
+            st := 0
+            ref_hi := na
+        // Perda de suporte (close abaixo)
+        confirm_res_here = false
+        if closed_below
+            if na(ref_lo)
+                ref_lo := low
+            else
+                if low < ref_lo
+                    confirm_res_here := true
+                    st := 2
+                    ref_lo := na
+                else
+                    ref_lo := low
+        // Superação de resistência (close acima)
+        confirm_sup_here = false
+        if closed_above
+            if na(ref_hi)
+                ref_hi := high
+            else
+                if high > ref_hi
+                    confirm_sup_here := true
+                    st := 1
+                    ref_hi := na
+                else
+                    ref_hi := high
+        array.set(fib_st, i, st)
+        array.set(fib_ref_lo, i, ref_lo)
+        array.set(fib_ref_hi, i, ref_hi)
+        array.set(fib_abv_run, i, abv_run)
+        array.set(fib_blw_run, i, blw_run)
+        // Marcadores no candle da confirmação, ancorados no nível Fibo
+        if show_break_marks and confirm_res_here
+            label.new(bar_index, level, "X", style=label.style_xcross, color=color.new(color.red, 20), textcolor=color.white, size=break_sz, yloc=yloc.price, tooltip="Rompimento pra baixo confirmado neste Fibo. Vira resistência.")
+        if show_break_marks and confirm_sup_here
+            label.new(bar_index, level, "O", style=label.style_circle, color=color.new(color.green, 20), textcolor=color.white, size=break_sz, yloc=yloc.price, tooltip="Rompimento pra cima confirmado neste Fibo. Vira suporte.")
+
+// Cores dinâmicas por nível — verde se suporte confirmado, vermelho se resistência confirmada, senão cor original
+color_dyn(idx, default_c) =>
+    st_i = array.get(fib_st, idx)
+    st_i == 1 ? color_confirm_sup : st_i == 2 ? color_confirm_res : default_c
+
+// Índices: u0=0 u50=1 u100=2 u150=3 u200=4 u250=5 u300=6 u350=7 u400=8 u450=9
+//         umid=10 l0=11 l50=12 l100=13 l150=14 l200=15 l250=16 l300=17 l350=18 l400=19 l450=20
+
+plot(show_fibo and has_base ? u0   : na, "★ R0 (topo 1º 5m)", color=color_dyn(0,  color_r0),       linewidth=lw_extremo)
+plot(show_fibo and has_base ? umid : na, "★ MID (meio 1º 5m)", color=color_dyn(10, color_mid_1st),  linewidth=2)
+plot(show_fibo and has_base ? u50  : na, "★ R50",              color=color_dyn(1,  color_res_mid),  linewidth=2)
+plot(show_fibo and has_base ? u100 : na, "R100",               color=color_dyn(2,  color_res))
+plot(show_fibo and has_base ? u150 : na, "R150",               color=color_dyn(3,  color_res))
+plot(show_fibo and has_base ? u200 : na, "R200",               color=color_dyn(4,  color_res))
+plot(show_fibo and has_base and show_all ? u250 : na, "R250",  color=color_dyn(5,  color_res))
+plot(show_fibo and has_base and show_all ? u300 : na, "R300",  color=color_dyn(6,  color_res))
+plot(show_fibo and has_base and show_all ? u350 : na, "R350",  color=color_dyn(7,  color_res))
+plot(show_fibo and has_base and show_all ? u400 : na, "R400",  color=color_dyn(8,  color_res))
+plot(show_fibo and has_base and show_all ? u450 : na, "R450",  color=color_dyn(9,  color_res))
+plot(show_fibo and has_base ? l0   : na, "★ S0 (base 1º 5m)",  color=color_dyn(11, color_s0),       linewidth=lw_extremo)
+plot(show_fibo and has_base ? l50  : na, "★ S50",              color=color_dyn(12, color_sup_mid),  linewidth=2)
+plot(show_fibo and has_base ? l100 : na, "S100",               color=color_dyn(13, color_sup))
+plot(show_fibo and has_base ? l150 : na, "S150",               color=color_dyn(14, color_sup))
+plot(show_fibo and has_base ? l200 : na, "S200",               color=color_dyn(15, color_sup))
+plot(show_fibo and has_base and show_all ? l250 : na, "S250",  color=color_dyn(16, color_sup))
+plot(show_fibo and has_base and show_all ? l300 : na, "S300",  color=color_dyn(17, color_sup))
+plot(show_fibo and has_base and show_all ? l350 : na, "S350",  color=color_dyn(18, color_sup))
+plot(show_fibo and has_base and show_all ? l400 : na, "S400",  color=color_dyn(19, color_sup))
+plot(show_fibo and has_base and show_all ? l450 : na, "S450",  color=color_dyn(20, color_sup))
 
 // ============================== INDICADORES 1min (chart) ====================
 // Estocástico LENTO (K=8, D=3, SMA duplo) — alinhado à spec v14 (04/08/2026)
@@ -716,112 +820,20 @@ if sell_signal_new
 // Ex.: só 5m compra → 5 ctr | 5m+15m → 10 ctr | 5m+15m+30m → 15 ctr | todos 4 → 20 ctr
 n_tfs_buy_now  = (cmb_5m_buy_st  ? 1 : 0) + (cmb_15m_buy_st  ? 1 : 0) + (cmb_30m_buy_st  ? 1 : 0) + (cmb_60m_buy_st  ? 1 : 0)
 n_tfs_sell_now = (cmb_5m_sell_st ? 1 : 0) + (cmb_15m_sell_st ? 1 : 0) + (cmb_30m_sell_st ? 1 : 0) + (cmb_60m_sell_st ? 1 : 0)
-// v14.1: sizing = 5 × N_TFs + bônus se ADX 5m intensificando (limitado por cap)
-sizing_by_tfs(n) => math.max(5, math.min(sizing_cap, 5 * n + (adx_intensifier ? adx_bonus : 0)))
-
-// ============================== POSIÇÃO IMPLÍCITA + SCALE-OUT ================
-// Rastreia posição assumida a partir do último buy_signal_new / sell_signal_new.
-// A cada TF que vira contra → marca "pending_exit" naquele TF.
-// No próximo toque em QUALQUER Fibo → sai 5 contratos e limpa a flag.
-
-var bool tf5_locked_buy   = false
-var bool tf15_locked_buy  = false
-var bool tf30_locked_buy  = false
-var bool tf60_locked_buy  = false
-var bool tf5_locked_sell  = false
-var bool tf15_locked_sell = false
-var bool tf30_locked_sell = false
-var bool tf60_locked_sell = false
-var int  contratos_open   = 0
-var string lado_open      = ""
-
-// Reset diário
-if is_new_day
-    tf5_locked_buy   := false
-    tf15_locked_buy  := false
-    tf30_locked_buy  := false
-    tf60_locked_buy  := false
-    tf5_locked_sell  := false
-    tf15_locked_sell := false
-    tf30_locked_sell := false
-    tf60_locked_sell := false
-    contratos_open   := 0
-    lado_open        := ""
-
-// Nova entrada: trava TFs que estavam alinhados no momento
-if buy_signal_new
-    tf5_locked_buy   := cmb_5m_buy_st
-    tf15_locked_buy  := cmb_15m_buy_st
-    tf30_locked_buy  := cmb_30m_buy_st
-    tf60_locked_buy  := cmb_60m_buy_st
-    tf5_locked_sell  := false
-    tf15_locked_sell := false
-    tf30_locked_sell := false
-    tf60_locked_sell := false
-    contratos_open   := math.max(5, 5 * n_tfs_buy_now)
-    lado_open        := "BUY"
-if sell_signal_new
-    tf5_locked_sell  := cmb_5m_sell_st
-    tf15_locked_sell := cmb_15m_sell_st
-    tf30_locked_sell := cmb_30m_sell_st
-    tf60_locked_sell := cmb_60m_sell_st
-    tf5_locked_buy   := false
-    tf15_locked_buy  := false
-    tf30_locked_buy  := false
-    tf60_locked_buy  := false
-    contratos_open   := math.max(5, 5 * n_tfs_sell_now)
-    lado_open        := "SELL"
-
-// Detecta TFs que já viraram contra (posição comprada perdendo TF)
-flip_5m_from_buy  = tf5_locked_buy  and cmb_5m_sell_st
-flip_15m_from_buy = tf15_locked_buy and cmb_15m_sell_st
-flip_30m_from_buy = tf30_locked_buy and cmb_30m_sell_st
-flip_60m_from_buy = tf60_locked_buy and cmb_60m_sell_st
-flip_5m_from_sell  = tf5_locked_sell  and cmb_5m_buy_st
-flip_15m_from_sell = tf15_locked_sell and cmb_15m_buy_st
-flip_30m_from_sell = tf30_locked_sell and cmb_30m_buy_st
-flip_60m_from_sell = tf60_locked_sell and cmb_60m_buy_st
-
-n_flips_buy  = (flip_5m_from_buy  ? 1 : 0) + (flip_15m_from_buy  ? 1 : 0) + (flip_30m_from_buy  ? 1 : 0) + (flip_60m_from_buy  ? 1 : 0)
-n_flips_sell = (flip_5m_from_sell ? 1 : 0) + (flip_15m_from_sell ? 1 : 0) + (flip_30m_from_sell ? 1 : 0) + (flip_60m_from_sell ? 1 : 0)
-
-// Toque em qualquer nível Fibo (21 níveis + MID)
-any_fibo_touch_now = has_base and (tocou(u0) or tocou(u50) or tocou(u100) or tocou(u150) or tocou(u200) or tocou(u250) or tocou(u300) or tocou(u350) or tocou(u400) or tocou(u450) or tocou(l0) or tocou(l50) or tocou(l100) or tocou(l150) or tocou(l200) or tocou(l250) or tocou(l300) or tocou(l350) or tocou(l400) or tocou(l450) or tocou(umid))
-
-// Sinal de saída parcial: existe flip pendente + tocou Fibo + tem posição aberta
-scale_out_buy_now  = lado_open == "BUY"  and n_flips_buy  > 0 and any_fibo_touch_now and contratos_open > 0
-scale_out_sell_now = lado_open == "SELL" and n_flips_sell > 0 and any_fibo_touch_now and contratos_open > 0
-
-// Executa saída: destrava os TFs que viraram e abate contratos
-if scale_out_buy_now
-    if flip_5m_from_buy
-        tf5_locked_buy  := false
-    if flip_15m_from_buy
-        tf15_locked_buy := false
-    if flip_30m_from_buy
-        tf30_locked_buy := false
-    if flip_60m_from_buy
-        tf60_locked_buy := false
-    contratos_open := math.max(0, contratos_open - (5 * n_flips_buy))
-    if contratos_open == 0
-        lado_open := ""
-if scale_out_sell_now
-    if flip_5m_from_sell
-        tf5_locked_sell  := false
-    if flip_15m_from_sell
-        tf15_locked_sell := false
-    if flip_30m_from_sell
-        tf30_locked_sell := false
-    if flip_60m_from_sell
-        tf60_locked_sell := false
-    contratos_open := math.max(0, contratos_open - (5 * n_flips_sell))
-    if contratos_open == 0
-        lado_open := ""
-
 // ============================== PAINEL VISUAL ===============================
 pos_table = f_pos(panel_pos)
 
-var table pnl = table.new(pos_table, 3, 13, border_width=1, bgcolor=color.new(#1e222d, 30))
+var table pnl = table.new(pos_table, 3, 10, border_width=1, bgcolor=color.new(#1e222d, 30))
+
+// Contagem de Fibos rompidos (v15) — para linha do painel
+n_sup_confirmed = 0
+n_res_confirmed = 0
+for i = 0 to 20
+    st_i = array.get(fib_st, i)
+    if st_i == 1
+        n_sup_confirmed += 1
+    if st_i == 2
+        n_res_confirmed += 1
 
 light(is_on) => is_on ? "🟢" : "⚪"
 color_bg_hit(hit) => hit ? color.new(color.green, 60) : color.new(color.gray, 90)
@@ -839,7 +851,7 @@ color_tf(score) => score == 3 ? color.new(color.yellow, 0) : score == 2 ? color.
 f_adx_pnl(active, exhausted, v, peak) => exhausted ? " ⚪ADX " + str.tostring(v, "#") + "/" + str.tostring(peak, "#") : (active ? " 🟢ADX " + str.tostring(v, "#") + "/" + str.tostring(peak, "#") : "")
 
 if show_panel and barstate.islast
-    table.clear(pnl, 0, 0, 2, 10)
+    table.clear(pnl, 0, 0, 2, 9)
     table.cell(pnl, 0, 0, "EIXO WIN — Painel MTF",   bgcolor=color.new(color.black, 30), text_color=color.white, text_size=size.small)
     table.cell(pnl, 1, 0, "🟢 COMPRA",                bgcolor=color_bg_hit(buy_signal_hit),  text_color=color.white, text_size=size.small)
     table.cell(pnl, 2, 0, "🔴 VENDA",                 bgcolor=color_bg_hit(sell_signal_hit), text_color=color.white, text_size=size.small)
@@ -868,24 +880,14 @@ if show_panel and barstate.islast
     table.cell(pnl, 0, 7, "Cong 4/4 (5/15/30/60)",   text_size=size.tiny, text_color=color.white)
     table.cell(pnl, 1, 7, light(cong5_buy)  + light(cong15_buy)  + light(cong30_buy)  + light(cong60_buy)  + " = " + str.tostring(cong44_buy_score),  text_size=size.tiny, text_color=(cong44_buy_score  == 4 ? color.yellow : color.gray))
     table.cell(pnl, 2, 7, light(cong5_sell) + light(cong15_sell) + light(cong30_sell) + light(cong60_sell) + " = " + str.tostring(cong44_sell_score), text_size=size.tiny, text_color=(cong44_sell_score == 4 ? color.yellow : color.gray))
-    // Sizing: 5 × N_TFs alinhados AGORA
-    table.cell(pnl, 0, 8, "Contratos p/ entrar (5×TFs)", text_size=size.tiny, text_color=color.white, tooltip="Se entrar AGORA no 1m: 5 contratos por TF alinhado. Mín 5, máx " + str.tostring(sizing_cap) + ".")
-    table.cell(pnl, 1, 8, str.tostring(sizing_by_tfs(n_tfs_buy_now)),  text_size=size.tiny, text_color=color.green)
-    table.cell(pnl, 2, 8, str.tostring(sizing_by_tfs(n_tfs_sell_now)), text_size=size.tiny, text_color=color.red)
-    // Posição implícita a partir do último gatilho
-    table.cell(pnl, 0, 9, "Posição aberta (implícita)", text_size=size.tiny, text_color=color.white, tooltip="Contratos assumidos a partir do último gatilho. Cada TF que virar contra → sai 5 no próximo toque em Fibo.")
-    table.cell(pnl, 1, 9, lado_open == "BUY"  ? str.tostring(contratos_open) + " ctr" : "—", text_size=size.tiny, text_color=(lado_open == "BUY"  ? color.green : color.gray))
-    table.cell(pnl, 2, 9, lado_open == "SELL" ? str.tostring(contratos_open) + " ctr" : "—", text_size=size.tiny, text_color=(lado_open == "SELL" ? color.red   : color.gray))
-    table.cell(pnl, 0, 10, "TFs travados na entrada", text_size=size.tiny, text_color=color.white)
-    table.cell(pnl, 1, 10, light(tf5_locked_buy)  + light(tf15_locked_buy)  + light(tf30_locked_buy)  + light(tf60_locked_buy),  text_size=size.tiny, text_color=color.green)
-    table.cell(pnl, 2, 10, light(tf5_locked_sell) + light(tf15_locked_sell) + light(tf30_locked_sell) + light(tf60_locked_sell), text_size=size.tiny, text_color=color.red)
-    table.cell(pnl, 0, 11, "Flips pendentes (sair 5×N)", text_size=size.tiny, text_color=color.white, tooltip="TFs travados que já viraram contra. No próximo toque em Fibo → sai 5 por flip.")
-    table.cell(pnl, 1, 11, str.tostring(n_flips_buy)  + " → -" + str.tostring(5 * n_flips_buy)  + " ctr", text_size=size.tiny, text_color=(n_flips_buy  > 0 ? color.orange : color.gray))
-    table.cell(pnl, 2, 11, str.tostring(n_flips_sell) + " → -" + str.tostring(5 * n_flips_sell) + " ctr", text_size=size.tiny, text_color=(n_flips_sell > 0 ? color.orange : color.gray))
     // Gate v14: 2º toque + fecha na direção → entra na abertura do candle seguinte
-    table.cell(pnl, 0, 12, "Gate v14 (2ºtoque+fecha)", text_size=size.tiny, text_color=color.white, tooltip="v14: armed = 2ª batida em Fibo + candle fecha na direção. Sinal (BUYv14/SELLv14) dispara no candle seguinte, na abertura.")
-    table.cell(pnl, 1, 12, buy_signal_v14 ? "🟢 ENTROU" : (buy_gate_v14_armed ? "🟡 armed" : "⚪"), text_size=size.tiny, text_color=(buy_signal_v14 ? color.green : (buy_gate_v14_armed ? color.yellow : color.gray)))
-    table.cell(pnl, 2, 12, sell_signal_v14 ? "🔴 ENTROU" : (sell_gate_v14_armed ? "🟡 armed" : "⚪"), text_size=size.tiny, text_color=(sell_signal_v14 ? color.red : (sell_gate_v14_armed ? color.yellow : color.gray)))
+    table.cell(pnl, 0, 8, "Gate v14 (2ºtoque+fecha)", text_size=size.tiny, text_color=color.white, tooltip="v14: armed = 2ª batida em Fibo + candle fecha na direção. Sinal (BUYv14/SELLv14) dispara no candle seguinte, na abertura.")
+    table.cell(pnl, 1, 8, buy_signal_v14 ? "🟢 ENTROU" : (buy_gate_v14_armed ? "🟡 armed" : "⚪"), text_size=size.tiny, text_color=(buy_signal_v14 ? color.green : (buy_gate_v14_armed ? color.yellow : color.gray)))
+    table.cell(pnl, 2, 8, sell_signal_v14 ? "🔴 ENTROU" : (sell_gate_v14_armed ? "🟡 armed" : "⚪"), text_size=size.tiny, text_color=(sell_signal_v14 ? color.red : (sell_gate_v14_armed ? color.yellow : color.gray)))
+    // Rompimentos confirmados (v15) — contagem de Fibos com X (res) ou O (sup)
+    table.cell(pnl, 0, 9, "Rompimentos (X res · O sup)", text_size=size.tiny, text_color=color.white, tooltip="Contagem de Fibos que confirmaram rompimento neste dia. X = perda de suporte (virou resistência). O = superação (virou suporte). Cancela após " + str.tostring(break_cancel_n) + " fechamentos consecutivos do lado oposto.")
+    table.cell(pnl, 1, 9, "O = " + str.tostring(n_sup_confirmed), text_size=size.tiny, text_color=(n_sup_confirmed > 0 ? color.green : color.gray))
+    table.cell(pnl, 2, 9, "X = " + str.tostring(n_res_confirmed), text_size=size.tiny, text_color=(n_res_confirmed > 0 ? color.red   : color.gray))
 
 // ============================== RODAPÉ: ÚLTIMO SCORE POR TF ==================
 // Rastreia a última vez que o score de cada TF/direção mudou.
@@ -1056,13 +1058,7 @@ alertcondition(buy_confirmed_44 or sell_confirmed_44,
      title="Eixo WIN — Convergência 4/4 PREMIUM",
      message="{{ticker}} @ {{close}} | 4/4 CONVERGÊNCIA TOTAL — todos os TFs (5+15+30+60) alinhados")
 
-// Scale-out parcial: TF virou contra + tocou Fibo → sair 5 contratos por TF flipado
-plotshape(scale_out_buy_now,  title="SAIR (COMPRA)", location=location.abovebar, color=color.new(color.orange, 0), style=shape.xcross,   size=size.small, text="↓5×N")
-plotshape(scale_out_sell_now, title="SAIR (VENDA)",  location=location.belowbar, color=color.new(color.orange, 0), style=shape.xcross,   size=size.small, text="↑5×N")
-
-alertcondition(scale_out_buy_now or scale_out_sell_now,
-     title="Eixo WIN — Scale-out parcial",
-     message="{{ticker}} @ {{close}} | Um TF virou contra + tocou Fibo — sair 5 contratos por TF flipado")
+// v15: scale-out ↓5×N/↑5×N removido (substituído por rompimento estrutural X/O por Fibo)
 
 // Plots hidden de debug removidos — Pine v5 limita 64 plots totais
 
